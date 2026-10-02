@@ -38,10 +38,10 @@
 	</developers>
 
 	<scm>
-		<connection>scm:git:git://github.com/GustavoJ-dev/PowerManager-API.git</connection>
-		<developerConnection>scm:git:ssh://github.com/GustavoJ-dev/PowerManager-API.git</developerConnection>
+		<connection>scm:git:git://github.com/GustavoJ-dev/PowerManager.git</connection>
+		<developerConnection>scm:git:ssh://github.com/GustavoJ-dev/PowerManager.git</developerConnection>
 		<tag>HEAD</tag>
-		<url>https://github.com/GustavoJ-dev/PowerManager-API</url>
+		<url>https://github.com/GustavoJ-dev/PowerManager</url>
 	</scm>
 
 	<properties>
