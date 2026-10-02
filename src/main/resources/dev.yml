@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:powermanager
+    username: sa
+    password:
+    driver-class-name: org.h2.driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format-sql: true
+
+  h2:
+    console:
+      enabled: true

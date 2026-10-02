@@ -1,0 +1,5 @@
+spring:
+  application:
+    name: powermanager
+  profiles:
+    active: prod
