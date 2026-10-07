@@ -23,7 +23,14 @@ import java.util.UUID;
         check = {
             @CheckConstraint(name = "ck_fatura_unidades", constraint = "unidades_consumidas >= 0"),
             @CheckConstraint(name = "ck_fatura_valor", constraint = "valor_total >= 0"),
-            @CheckConstraint(name = "ck_fatura_status", constraint = "status IN('PENDENTE', 'PAGO')")
+            @CheckConstraint(name = "ck_fatura_status", constraint = "status IN('PENDENTE', 'PAGO')"),
+            @CheckConstraint(name = "ck_fatura_aluguel", constraint = "aluguel_medidor_aplicado >= 0"),
+            @CheckConstraint(name = "ck_fatura_cess", constraint = "cess_aplicado >= 0"),
+            @CheckConstraint(name = "ck_fatura_custo_unidade", constraint = "custo_por_unidade_aplicado >= 0"),
+            @CheckConstraint(name = "ck_fatura_imposto_servico", constraint = "imposto_servico_aplicado >= 0"),
+            @CheckConstraint(name = "ck_fatura_taxa_fixa", constraint = "taxa_fixa_aplicada >= 0"),
+            @CheckConstraint(name = "ck_fatura_taxa_servico",constraint = "taxa_servico_aplicada >= 0"),
+
         }
 )
 @Getter
@@ -42,6 +49,24 @@ public class Fatura {
 
     @Column(name = "unidades_consumidas", nullable = false, precision = 10, scale = 2)
     private BigDecimal unidadesConsumidas;
+
+    @Column(name = "custo_por_unidade_aplicado", nullable = false, precision = 10, scale = 2)
+    private BigDecimal custoPorUnidadeAplicado;
+
+    @Column(name = "aluguel_medidor_aplicado", nullable = false, precision = 10, scale = 2)
+    private BigDecimal aluguelMedidorAplicado;
+
+    @Column(name = "taxa_servico_aplicada", nullable = false, precision = 10, scale = 2)
+    private BigDecimal taxaServicoAplicada;
+
+    @Column(name = "imposto_servico_aplicado", nullable = false, precision = 10, scale = 2)
+    private BigDecimal impostoServicoAplicado;
+
+    @Column(name = "cess_aplicado", nullable = false, precision = 10, scale = 2)
+    private BigDecimal cessAplicado;
+
+    @Column(name = "taxa_fixa_aplicada", nullable = false, precision = 10, scale = 2)
+    private BigDecimal taxaFixaAplicada;
 
     @Column(name = "valor_total", nullable = false, precision = 10, scale = 2)
     private BigDecimal valorTotal;

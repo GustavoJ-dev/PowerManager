@@ -24,6 +24,12 @@ public class MedidorService {
                 new RuntimeException("Medidor não encontrado"));
     }
 
+    public Medidor buscarPorId(UUID id){
+
+        return medidorRepo.findById(id).orElseThrow( ()->
+                new RuntimeException("medidor não encontrado"));
+    }
+
     public Medidor atualizarMedidor(UUID id, Medidor dadosAtualizados) {
         Medidor medidor = medidorRepo.findById(id)
                 .orElseThrow(() ->
