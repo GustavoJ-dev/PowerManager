@@ -3,6 +3,9 @@ package com.powermanager.powermanager.services;
 import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.entity.Usuario;
 import com.powermanager.powermanager.entity.enums.TipoUsuario;
+import com.powermanager.powermanager.exception.UsernameAlreadyExistsException;
+import com.powermanager.powermanager.exception.UsuarioNotFoundException;
+import com.powermanager.powermanager.exception.UsuarioValidationException;
 import com.powermanager.powermanager.repository.UsuarioRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,19 +32,23 @@ public class UsuarioService {
         //usuario CLIENTE precisa estar associado a um cliente
         //ADMNISTRADOR não precisa estar associado a cliente
 
-        if (usuario.getTipoUsuario() == null || usuario.getCliente().getId() == null){
+        if (usuario.getTipoUsuario() == TipoUsuario.CLIENTE){
 
-            throw new IllegalArgumentException("Usuario CLIENTE deve estar associado a um cliente");
+            if (usuario.getCliente() == null || usuario.getCliente().getId() == null){
+
+                throw new UsuarioValidationException("Usuario CLIENTE deve estar associado a um cliente");
+            }
+
+            Cliente cliente = clienteService.buscarPorId(usuario.getCliente().getId());
+
+            usuario.setCliente(cliente);
         }
-
-        Cliente cliente = clienteService.buscarPorId(usuario.getCliente().getId());
-
-        usuario.setCliente(cliente);
 
         if (usuario.getTipoUsuario() == TipoUsuario.ADMINISTRADOR) {
 
             usuario.setCliente(null);
         }
+
         return usuarioRepo.save(usuario);
     }
 
@@ -57,7 +64,7 @@ public class UsuarioService {
     public Usuario buscarPorId(UUID id){
 
         return usuarioRepo.findById(id).orElseThrow(() ->
-                new RuntimeException("Nenhum Usuário com esse ID:" + id));
+                new UsuarioNotFoundException("Nenhum Usuário com esse ID:" + id));
     }
 
     //busca um usuario pelo username
@@ -65,7 +72,7 @@ public class UsuarioService {
     public Usuario buscaPorUsername(String username){
 
         return usuarioRepo.findByUsername(username).orElseThrow(() ->
-                new RuntimeException("Usuário: " + username + " não encontrado."));
+                new UsuarioNotFoundException("Usuário: " + username + " não encontrado."));
     }
 
     @Transactional
@@ -75,7 +82,7 @@ public class UsuarioService {
 
         if (usuarioAtualizado.getUsername() == null || usuarioAtualizado.getUsername().isBlank()){
 
-            throw new IllegalArgumentException("O username é obrigatório");
+            throw new UsuarioValidationException("O username é obrigatório");
         }
 
         /*
@@ -107,11 +114,11 @@ public class UsuarioService {
     public Usuario autenticar(String username, String passwordHash) {
 
         Usuario usuario = usuarioRepo.findByUsername(username).orElseThrow(() ->
-                        new RuntimeException("Usuário ou senha inválidos."));
+                        new UsuarioValidationException("Usuário ou senha inválidos."));
 
         if (!usuario.getPasswordHash().equals(passwordHash)){
 
-            throw new RuntimeException("Usuário ou senha inválidos.");
+            throw new UsuarioValidationException("Usuário ou senha inválidos.");
         }
 
         return usuario;
@@ -122,27 +129,27 @@ public class UsuarioService {
 
         if (usuario == null) {
 
-            throw new IllegalArgumentException("Usuário não pode ser nulo.");
+            throw new UsuarioValidationException("Usuário não pode ser nulo.");
         }
 
         if (usuario.getUsername() == null || usuario.getUsername().isBlank()) {
 
-            throw new IllegalArgumentException("O username é obrigatório.");
+            throw new UsuarioValidationException("O username é obrigatório.");
         }
 
         if (usuario.getNome() == null || usuario.getNome().isBlank()) {
 
-            throw new IllegalArgumentException("O nome é obrigatório.");
+            throw new UsuarioValidationException("O nome é obrigatório.");
         }
 
         if (usuario.getPasswordHash() == null || usuario.getPasswordHash().isBlank()) {
 
-            throw new IllegalArgumentException("A senha é obrigatória.");
+            throw new UsuarioValidationException("A senha é obrigatória.");
         }
 
         if (usuario.getTipoUsuario() == null) {
 
-            throw new IllegalArgumentException("O tipo do usuário é obrigatório.");
+            throw new UsuarioValidationException("O tipo do usuário é obrigatório.");
         }
     }
 
@@ -150,8 +157,7 @@ public class UsuarioService {
 
         if (usuarioRepo.findByUsername(username).isPresent()) {
 
-            throw new RuntimeException("Username já está sendo utilizado: " + username);
+            throw new UsernameAlreadyExistsException("Username já está sendo utilizado: " + username);
         }
     }
-
 }

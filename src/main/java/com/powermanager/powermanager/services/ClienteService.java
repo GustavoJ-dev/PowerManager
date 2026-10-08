@@ -1,6 +1,7 @@
 package com.powermanager.powermanager.services;
 
 import com.powermanager.powermanager.entity.Cliente;
+import com.powermanager.powermanager.exception.ClienteNotFoundException;
 import com.powermanager.powermanager.repository.ClienteRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,10 +28,13 @@ public class ClienteService {
     public Cliente buscarPorId(UUID id){
 
         return clienteRepo.findById(id).orElseThrow(() ->
-                new RuntimeException("Cliente não encontrado"));
+                new ClienteNotFoundException("Cliente não encontrado"));
     }
 
     public void excluir(UUID id){
+
+        Cliente cliente = clienteRepo.findById(id).orElseThrow(()->
+                new ClienteNotFoundException("Cliente não encontrado"));
 
         clienteRepo.deleteById(id);
     }

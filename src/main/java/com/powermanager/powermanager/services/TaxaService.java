@@ -1,6 +1,8 @@
 package com.powermanager.powermanager.services;
 
 import com.powermanager.powermanager.entity.Taxa;
+import com.powermanager.powermanager.exception.TaxaNotFoundException;
+import com.powermanager.powermanager.exception.TaxaValidationException;
 import com.powermanager.powermanager.repository.TaxaRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -53,11 +55,11 @@ public class TaxaService {
 
         if (data == null){
 
-            throw new IllegalArgumentException("A data para consulta não pode ser nula");
+            throw new TaxaValidationException("A data para consulta não pode ser nula");
         }
 
         return taxaRepo.buscarTaxaVigenteEm(data).orElseThrow(() ->
-                new RuntimeException("Nenhuma taxa vigente encontrada nessa data"));
+                new TaxaNotFoundException("Nenhuma taxa vigente encontrada nessa data"));
     }
 
     /**
@@ -88,21 +90,21 @@ public class TaxaService {
 
         if (!inicioNovaVigencia.isAfter(taxaAtual.getInicioVigencia())){
 
-            throw new IllegalArgumentException("A nova Taxa deve iniciar apos o inicio da taxa atual");
+            throw new TaxaValidationException("A nova Taxa deve iniciar apos o inicio da taxa atual");
         }
-
-        taxaAtual.setFimVigencia(inicioNovaVigencia);
-
-        taxaRepo.save(taxaAtual);
 
         /*
          * Criamos um novo registro para preservar o histórico.
          */
-        novaTaxa.setId(null);
         novaTaxa.setInicioVigencia(inicioNovaVigencia);
         novaTaxa.setFimVigencia(null);
+        novaTaxa.setId(null);
 
         validarTaxa(novaTaxa);
+
+        taxaAtual.setFimVigencia(inicioNovaVigencia);
+
+        taxaRepo.save(taxaAtual);
 
         return taxaRepo.save(novaTaxa);
     }
@@ -113,9 +115,7 @@ public class TaxaService {
     private void validarTaxa(Taxa taxa) {
 
         if (taxa == null) {
-            throw new IllegalArgumentException(
-                    "A taxa não pode ser nula"
-            );
+            throw new TaxaValidationException("A taxa não pode ser nula");
         }
 
         validarValor(taxa.getCustoPorUnidade(), "Custo por unidade");
@@ -137,14 +137,12 @@ public class TaxaService {
     private void validarValor(BigDecimal valor, String campo) {
 
         if (valor == null) {
-            throw new IllegalArgumentException(
-                    campo + " não pode ser nulo"
-            );
+            throw new TaxaValidationException(campo + " não pode ser nulo");
         }
 
         if (valor.compareTo(BigDecimal.ZERO) < 0) {
 
-            throw new IllegalArgumentException(campo + " não pode ser negativo");
+            throw new TaxaValidationException(campo + " não pode ser negativo");
         }
     }
 
@@ -155,12 +153,12 @@ public class TaxaService {
 
         if (inicio == null) {
 
-            throw new IllegalArgumentException("O início da vigência não pode ser nulo");
+            throw new TaxaValidationException("O início da vigência não pode ser nulo");
         }
 
         if (fim != null && !fim.isAfter(inicio)) {
 
-            throw new IllegalArgumentException("O fim da vigência deve ser posterior ao início");
+            throw new TaxaValidationException("O fim da vigência deve ser posterior ao início");
         }
     }
 
@@ -174,7 +172,7 @@ public class TaxaService {
 
         if (!taxasSobrepostas.isEmpty()) {
 
-            throw new IllegalArgumentException("O período informado se sobrepõe a uma taxa já existente");
+            throw new TaxaValidationException("O período informado se sobrepõe a uma taxa já existente");
         }
     }
 }

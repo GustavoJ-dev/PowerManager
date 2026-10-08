@@ -4,6 +4,10 @@ import com.powermanager.powermanager.entity.Fatura;
 import com.powermanager.powermanager.entity.Medidor;
 import com.powermanager.powermanager.entity.Taxa;
 import com.powermanager.powermanager.entity.enums.StatusFatura;
+import com.powermanager.powermanager.exception.FaturaAlreadyExistsException;
+import com.powermanager.powermanager.exception.FaturaAlreadyPaidException;
+import com.powermanager.powermanager.exception.FaturaNotFoundException;
+import com.powermanager.powermanager.exception.FaturaValidationException;
 import com.powermanager.powermanager.repository.FaturaRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -91,13 +95,13 @@ public class FaturaService {
 
     //busca determinada fatura de um medidor em uma competência especifíca
     @Transactional(readOnly = true)
-    public Fatura buscarPorMedidorEMs(UUID id, LocalDate competencia){
+    public Fatura buscarPorMedidorEMes(UUID id, LocalDate competencia){
 
         Medidor medidor = medidorService.buscarPorId(id);
 
         return faturaRepo.findByMedidorAndCompetencia(medidor, competencia)
                 .orElseThrow(() ->
-                        new RuntimeException("Fatura não encotrada para o medidor: " + id +
+                        new FaturaNotFoundException("Fatura não encotrada para o medidor: " + id +
                                 " na competência: " + competencia));
 
     }
@@ -116,7 +120,7 @@ public class FaturaService {
     public Fatura obterDetalhesDaFatura(UUID id){
 
         return faturaRepo.findById(id).orElseThrow(() ->
-                new RuntimeException("Fatura não encontrada: " + id));
+                new FaturaNotFoundException("Fatura não encontrada: " + id));
     }
 
     //Marca uma Fatura como paga
@@ -127,7 +131,7 @@ public class FaturaService {
 
         if (fatura.getStatusFatura() == StatusFatura.PAGO){
 
-            throw new RuntimeException("Essa fatura já está paga.");
+            throw new FaturaAlreadyPaidException("Essa fatura já está paga.");
         }
 
         fatura.setStatusFatura(StatusFatura.PAGO);
@@ -162,12 +166,12 @@ public class FaturaService {
 
         if (id == null){
 
-            throw new IllegalArgumentException("O medidor é obrigatório");
+            throw new FaturaValidationException("O medidor é obrigatório");
         }
 
         if (competencia == null){
 
-            throw new IllegalArgumentException("A competência é obrigatória");
+            throw new FaturaValidationException("A competência é obrigatória");
         }
 
         validarUnidades(unidadesConsumidas);
@@ -177,12 +181,12 @@ public class FaturaService {
 
         if (unidadesConsumidas == null){
 
-            throw new IllegalArgumentException("As unidades consumidas são obrigatórias");
+            throw new FaturaValidationException("As unidades consumidas são obrigatórias");
         }
 
         if (unidadesConsumidas.compareTo(BigDecimal.ZERO) < 0){
 
-            throw new IllegalArgumentException("As unidades consumidas não podem ser negativas");
+            throw new FaturaValidationException("As unidades consumidas não podem ser negativas");
         }
     }
 
@@ -190,8 +194,8 @@ public class FaturaService {
 
         if (faturaRepo.findByMedidorAndCompetencia(medidor, competencia).isPresent()){
 
-            throw new RuntimeException("Já existe uma fatura para o medidor: " + medidor.getNumero() +
-                    "na competência: " + competencia);
+            throw new FaturaAlreadyExistsException("Já existe uma fatura para o medidor: " + medidor.getNumero() +
+                    " na competência: " + competencia);
         }
     }
 }

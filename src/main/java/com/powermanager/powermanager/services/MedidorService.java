@@ -1,6 +1,7 @@
 package com.powermanager.powermanager.services;
 
 import com.powermanager.powermanager.entity.Medidor;
+import com.powermanager.powermanager.exception.MedidorNotFoundException;
 import com.powermanager.powermanager.repository.MedidorRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,19 +22,19 @@ public class MedidorService {
     public Medidor buscarPorNumero(String numero){
 
         return medidorRepo.findByNumero(numero).orElseThrow(() ->
-                new RuntimeException("Medidor não encontrado"));
+                new MedidorNotFoundException("Medidor não encontrado pelo número:" + numero));
     }
 
     public Medidor buscarPorId(UUID id){
 
         return medidorRepo.findById(id).orElseThrow( ()->
-                new RuntimeException("medidor não encontrado"));
+                new MedidorNotFoundException("medidor não encontrado: " + id));
     }
 
     public Medidor atualizarMedidor(UUID id, Medidor dadosAtualizados) {
         Medidor medidor = medidorRepo.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Medidor não encontrado: " + id));
+                        new MedidorNotFoundException("Medidor não encontrado: " + id));
 
         medidor.setNumero(dadosAtualizados.getNumero());
         medidor.setLocalizacao(dadosAtualizados.getLocalizacao());
