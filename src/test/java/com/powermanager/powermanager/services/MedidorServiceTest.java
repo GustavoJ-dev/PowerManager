@@ -135,8 +135,7 @@ public class MedidorServiceTest {
         UUID id = UUID.randomUUID();
         Medidor dadosAtualizados = new Medidor();
 
-        when(medidorRepo.findById(id))
-                .thenReturn(Optional.empty());
+        when(medidorRepo.findById(id)).thenReturn(Optional.empty());
 
         assertThrows(MedidorNotFoundException.class,
                 () -> medidorService.atualizarMedidor(id, dadosAtualizados));

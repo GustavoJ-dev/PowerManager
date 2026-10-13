@@ -14,6 +14,7 @@ import java.util.UUID;
 public interface FaturaRepo extends JpaRepository<Fatura, UUID> {
 
     List<Fatura> findByMedidor(Medidor medidor);
+
     List<Fatura> findByMedidorOrderByCompetenciaDesc(Medidor medidor);
 
     Optional<Fatura> findByMedidorAndCompetencia(Medidor medidor, LocalDate competencia);
