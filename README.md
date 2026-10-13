@@ -1,262 +1,220 @@
 # ⚡ PowerManager API
 
-> API REST para gerenciamento de clientes, medidores, tarifas e faturamento de energia elétrica.
+> API REST para gerenciamento do ciclo de faturamento de energia elétrica.
 
----
+[![Java](https://img.shields.io/badge/Java-21-orange)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## Sobre o projeto
+## 📌 Sobre o projeto
 
-O **PowerManager API** é uma API REST desenvolvida para centralizar o gerenciamento do processo de faturamento de energia elétrica.
+O **PowerManager API** é um projeto backend desenvolvido em Java com Spring Boot para organizar o gerenciamento de clientes, medidores, tarifas, faturas e usuários em um sistema de faturamento de energia elétrica.
 
-A aplicação permite administrar clientes, medidores, tarifas, faturas e usuários, além de realizar o cálculo e o controle das cobranças geradas a partir do consumo de energia.
+A aplicação está em desenvolvimento. Nesta etapa, o projeto possui o domínio modelado, persistência com Spring Data JPA, repositórios, camada de serviços, exceções de domínio e testes unitários dos services. A camada de endpoints REST ainda será desenvolvida.
 
-O projeto é baseado em um sistema de faturamento de energia elétrica já existente, mantendo suas principais funcionalidades e regras de negócio, adaptadas para uma API REST.
+## 🎯 Funcionalidades do domínio
 
----
+- **Clientes:** cadastro e consulta dos consumidores.
+- **Medidores:** identificação e configuração dos medidores associados aos clientes.
+- **Tarifas:** armazenamento dos componentes usados no cálculo do faturamento.
+- **Faturas:** registro das cobranças, competência, consumo, valor e status.
+- **Usuários:** gerenciamento de usuários dos tipos `ADMIN` e `CUSTOMER`.
+- **Regras de negócio:** validações e tratamento de situações inválidas nas camadas de serviço.
 
-## Funcionalidades
+### Regras de negócio principais
 
-### 👤 Clientes
+- Cada cliente possui um único medidor associado.
+- O número do medidor deve ser único.
+- Um medidor pode possuir várias faturas, mas não mais de uma fatura por competência.
+- O consumo e os valores monetários não podem ser negativos.
+- Os status de fatura previstos são `PENDING` e `PAID`.
+- Cada usuário possui um nome de usuário único.
+- Usuários do tipo `CUSTOMER` podem ser vinculados a um cliente; usuários `ADMIN` podem existir sem esse vínculo.
 
-Gerenciamento dos consumidores cadastrados no sistema.
+### Fluxo de faturamento
 
-Cada cliente possui:
+```text
+Cliente → Medidor → Consumo → Tarifas → Cálculo → Fatura → Pagamento
+```
 
-- Nome;
-- Endereço;
-- Cidade;
-- Estado;
-- E-mail;
-- Telefone.
+O valor da fatura considera o consumo e os componentes tarifários cadastrados, como custo por unidade, aluguel do medidor, taxas e impostos.
 
----
+## 🧰 Tecnologias
 
-### ⚡ Medidores
-
-Gerenciamento dos medidores associados aos clientes.
-
-Cada medidor possui:
-
-- Número do medidor;
-- Localização;
-- Tipo;
-- Código de fase;
-- Tipo de faturamento;
-- Quantidade de dias.
-
-Cada cliente possui um único medidor associado.
-
----
-
-### 💰 Tarifas
-
-Gerenciamento dos valores utilizados no cálculo das faturas.
-
-O sistema contempla:
-
-- Custo por unidade consumida;
-- Aluguel do medidor;
-- Taxa de serviço;
-- Imposto de serviço;
-- Cess;
-- Taxa fixa.
-
-Esses valores são utilizados na composição do valor final da fatura.
-
----
-
-### 🧾 Faturas
-
-Gerenciamento das cobranças de energia elétrica.
-
-Cada fatura possui:
-
-- Competência;
-- Unidades consumidas;
-- Valor total;
-- Status;
-- Medidor relacionado.
-
-Uma mesma competência não pode possuir mais de uma fatura para o mesmo medidor.
-
-#### Status
-
-| Status | Descrição |
+| Tecnologia | Utilização |
 | --- | --- |
-| `PENDING` | Fatura pendente |
-| `PAID` | Fatura paga |
+| Java 21 | Linguagem da aplicação |
+| Spring Boot 4.1.1 | Configuração e execução da aplicação |
+| Spring Data JPA | Persistência e acesso a dados |
+| Hibernate | Mapeamento objeto-relacional |
+| Bean Validation | Validação de dados |
+| Maven Wrapper | Build e execução do projeto |
+| H2 | Banco em memória para desenvolvimento |
+| MySQL 8.4 | Banco configurado para o ambiente de produção |
+| Docker Compose | Inicialização do MySQL local |
+| JUnit / Spring Boot Test | Testes automatizados |
+| JaCoCo | Relatório de cobertura de testes |
+| Lombok | Redução de código repetitivo |
 
----
+## 🏗️ Arquitetura
 
-### 🧮 Cálculo do faturamento
+O código está organizado por responsabilidade dentro do pacote `com.powermanager.powermanager`:
 
-O valor da fatura é determinado a partir das unidades consumidas e dos componentes tarifários cadastrados.
+- `entity/`: entidades JPA e enums do domínio.
+- `repository/`: interfaces de persistência com Spring Data JPA.
+- `services/`: regras de negócio e operações das entidades.
+- `exception/`: exceções específicas do domínio.
+- `src/test/`: testes automatizados, incluindo testes unitários dos services.
 
-O processo considera:
+A camada de controllers e os endpoints HTTP ainda não estão implementados. Por isso, esta versão do README não lista rotas REST que ainda não existem no código.
 
-**Unidades consumidas → Custo por unidade → Componentes tarifários → Valor total da fatura**
+## 🚀 Pré-requisitos
 
-Os componentes tarifários considerados são:
+Para executar a aplicação no ambiente de desenvolvimento:
 
-- Custo por unidade;
-- Aluguel do medidor;
-- Taxa de serviço;
-- Imposto de serviço;
-- Cess;
-- Taxa fixa.
+- JDK 21;
+- Git.
 
----
+O projeto inclui Maven Wrapper, portanto não é necessário instalar o Maven separadamente. Para usar o profile de produção localmente, também será necessário Docker com Docker Compose e as configurações do MySQL descritas abaixo.
 
-### 💳 Controle de pagamento
+## ▶️ Executando em desenvolvimento
 
-As faturas possuem controle de situação para identificar cobranças pendentes e pagas.
+1. Clone o repositório:
 
-O fluxo de pagamento é:
+   ```bash
+   git clone https://github.com/GustavoJ-dev/PowerManager.git
+   cd PowerManager
+   ```
 
-**PENDING → PAID**
+2. Execute a aplicação com o profile `dev`.
 
----
+   **Linux/macOS:**
 
-### 🔐 Usuários
+   ```bash
+   ./mvnw spring-boot:run
+   ```
 
-Gerenciamento dos usuários do sistema.
+   **Windows (PowerShell ou CMD):**
 
-Existem dois tipos de usuário:
+   ```powershell
+   .\mvnw.cmd spring-boot:run
+   ```
 
-| Tipo | Descrição |
-| --- | --- |
-| `ADMIN` | Usuário administrativo |
-| `CUSTOMER` | Usuário vinculado a um cliente |
+O profile `dev` utiliza o banco H2 em memória. A configuração atual recria as tabelas ao iniciar a aplicação; os dados não são persistidos depois que ela é encerrada.
 
-Usuários `CUSTOMER` podem estar associados a um cliente cadastrado.
+### Console H2
 
-Cada usuário possui um nome de usuário único.
+Com a aplicação em execução, acesse:
 
----
+- URL: http://localhost:8080/h2-console
+- JDBC URL: `jdbc:h2:mem:powermanager`
+- Usuário: `sa`
+- Senha: deixe em branco.
 
-## Fluxo do sistema
+Use esses dados apenas no ambiente local de desenvolvimento, conforme a configuração atual.
 
-O processo principal da aplicação segue o fluxo:
+## 🐬 Executando com MySQL
 
-**Cliente → Medidor → Consumo → Tarifas → Cálculo → Fatura → Pagamento**
+O profile `prod` está configurado para MySQL. Para executá-lo localmente, primeiro configure as variáveis de ambiente usadas pelo `docker-compose.yml` e pelo `application-prod.yml`.
 
-O cliente possui um medidor associado, o consumo é utilizado no cálculo da cobrança e as tarifas determinam os componentes que formam o valor final da fatura.
+Crie um arquivo `.env` na raiz do projeto, sem enviá-lo ao Git, com os valores do seu ambiente:
 
-Após sua geração, a fatura permanece com seu status controlado pelo sistema, permitindo identificar se está pendente ou paga.
+```dotenv
+MYSQL_DATABASE=powermanager
+MYSQL_USER=powermanager
+MYSQL_PASSWORD=defina_uma_senha_local
+MYSQL_PORT=3306
+```
 
----
+Inicie o banco:
 
-## Regras de negócio
+```bash
+docker compose up -d
+```
 
-### Clientes e medidores
+Depois, inicie a aplicação com o profile `prod`.
 
-- Cada cliente possui um único medidor;
-- Cada medidor pertence a um cliente;
-- O número do medidor deve ser único;
-- Um cliente não pode possuir mais de um medidor associado.
+**Linux/macOS:**
 
-### Faturas
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.profiles=prod
+```
 
-- Cada fatura pertence a um medidor;
-- Um medidor pode possuir várias faturas;
-- Um medidor não pode possuir duas faturas para a mesma competência;
-- As unidades consumidas não podem ser negativas;
-- O valor total da fatura não pode ser negativo;
-- O status da fatura deve ser válido.
+**Windows:**
 
-### Tarifas
+```powershell
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=prod"
+```
 
-- Os valores das tarifas não podem ser negativos;
-- As tarifas são utilizadas na composição do valor da fatura.
+O profile de produção usa `ddl-auto: validate`, portanto espera que o esquema do banco já esteja compatível com as entidades. Não utilize credenciais de exemplo em ambientes reais.
 
-### Usuários
+Para parar o container do banco:
 
-- Cada usuário possui um nome de usuário único;
-- O usuário deve possuir um tipo válido;
-- Usuários `CUSTOMER` podem estar vinculados a um cliente;
-- Usuários `ADMIN` podem existir sem vínculo com um cliente.
+```bash
+docker compose down
+```
 
----
+O volume `powermanager-mysql-data` mantém os dados do MySQL entre reinicializações do container. Para removê-lo junto com os dados, seria necessário executar explicitamente `docker compose down -v`.
 
-## Modelo do domínio
+## 🧪 Testes
 
-| Entidade | Responsabilidade |
-| --- | --- |
-| `Cliente` | Cadastro dos consumidores |
-| `Medidor` | Identificação e configuração do medidor |
-| `Fatura` | Registro e controle das cobranças |
-| `Taxa` | Valores utilizados no cálculo do faturamento |
-| `Usuario` | Usuários e seus respectivos tipos de acesso |
+Execute a suíte de testes com o Maven Wrapper:
 
-### Relacionamentos
+**Linux/macOS:**
 
-- **Cliente 1 : 1 Medidor**
-- **Medidor 1 : N Fatura**
-- **Cliente 1 : N Usuario**
-- **Taxa** participa do processo de cálculo das faturas.
+```bash
+./mvnw test
+```
 
----
+**Windows:**
 
-## Estado do projeto
+```powershell
+.\mvnw.cmd test
+```
 
-**Em desenvolvimento.**
+Para executar também a etapa de verificação e gerar o relatório de cobertura do JaCoCo:
 
-### Concluído
+```bash
+./mvnw verify
+```
 
-- [x] Definição do domínio;
-- [x] Modelagem das entidades;
-- [x] Definição dos relacionamentos;
-- [x] Definição das regras de negócio;
-- [x] Estrutura inicial do banco de dados;
-- [x] Configuração do ambiente de desenvolvimento;
-- [x] Configuração da persistência;
-- [x] Definição do processo de faturamento.
+No Windows, use `.\mvnw.cmd verify`.
 
-### Em desenvolvimento
+Após a execução bem-sucedida, o relatório HTML do JaCoCo fica em:
 
-- [ ] Implementação das entidades;
-- [ ] Implementação da persistência;
-- [ ] Implementação das regras de negócio;
-- [ ] Implementação dos recursos REST;
-- [ ] Implementação das validações;
-- [ ] Implementação do tratamento de erros;
-- [ ] Implementação da autenticação e autorização;
-- [ ] Implementação dos testes;
-- [ ] Documentação da API.
+```text
+target/site/jacoco/index.html
+```
 
----
+Os testes dos services cobrem cenários de sucesso e de validação/regras de negócio. A cobertura deve ser consultada no relatório gerado; este README não declara um percentual fixo.
 
-## Roadmap
+## 📍 Estado atual e próximos passos
 
-A evolução da PowerManager API seguirá a implementação dos recursos definidos para o domínio:
+O projeto continua em desenvolvimento.
 
-- [ ] Gerenciamento completo de clientes;
-- [ ] Gerenciamento completo de medidores;
-- [ ] Gerenciamento de tarifas;
-- [ ] Geração de faturas;
-- [ ] Cálculo das faturas;
-- [ ] Controle de pagamentos;
-- [ ] Gerenciamento de usuários;
-- [ ] Autenticação;
-- [ ] Autorização;
-- [ ] Consultas e filtros;
-- [ ] Paginação;
-- [ ] Documentação dos endpoints.
+### Implementado
 
----
+- [x] Modelagem das entidades e relacionamentos.
+- [x] Configuração dos profiles de desenvolvimento (H2) e produção (MySQL).
+- [x] Repositórios com Spring Data JPA.
+- [x] Camada de services e regras de negócio iniciais.
+- [x] Exceções específicas do domínio.
+- [x] Testes unitários dos services.
 
-## Visão geral
+### Próximas etapas
 
-A PowerManager API centraliza o ciclo de faturamento de energia elétrica, conectando o gerenciamento de clientes, medidores, consumo, tarifas, faturas e usuários em um único sistema.
+- [ ] Implementar controllers e endpoints REST.
+- [ ] Padronizar respostas HTTP e tratamento global de erros.
+- [ ] Completar validações de entrada e integração com a camada web.
+- [ ] Implementar autenticação e autorização.
+- [ ] Documentar os endpoints com exemplos de requisição e resposta.
+- [ ] Expandir testes de integração e revisar a cobertura.
 
-O fluxo principal pode ser resumido como:
+## 📄 Licença
 
-**Cliente → Medidor → Consumo → Faturamento → Fatura → Pagamento**
+Este projeto está licenciado sob a [MIT License](LICENSE).
 
----
+## 👤 Autor
 
----
-
-## Autor
-
-**Gustavo de Jesus Silva**
+**Gustavo de Jesus Silva**  
+GitHub: [@GustavoJ-dev](https://github.com/GustavoJ-dev)
