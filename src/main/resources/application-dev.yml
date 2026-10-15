@@ -8,7 +8,9 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
-    show-sql: true
+      show-sql: true
+      format-sql: true
+      use-sql-comments: true
     properties:
       hibernate:
         format-sql: true
@@ -17,3 +19,7 @@ spring:
     console:
       enabled: true
       path: /h2-console
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
