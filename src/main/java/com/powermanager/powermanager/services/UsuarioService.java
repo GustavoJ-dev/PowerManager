@@ -78,26 +78,24 @@ public class UsuarioService {
     @Transactional
     public Usuario atualizarUsuario(UUID id, Usuario usuarioAtualizado) {
 
+        if (usuarioAtualizado == null) {
+
+            throw new UsuarioValidationException("Os dados do usuário para atualização não podem ser nulos.");
+        }
+
         Usuario usuario = buscarPorId(id);
 
-        if (usuarioAtualizado.getUsername() == null || usuarioAtualizado.getUsername().isBlank()){
+        if (usuarioAtualizado.getUsername() == null || usuarioAtualizado.getUsername().isBlank()) {
 
             throw new UsuarioValidationException("O username é obrigatório");
         }
 
-        /*
-         * Caso o username esteja sendo alterado,
-         * verifica se o novo username já pertence
-         * a outro usuário.
-         */
-
-        if (!usuario.getUsername().equals(usuarioAtualizado.getUsername())){
+        if (!usuario.getUsername().equals(usuarioAtualizado.getUsername())) {
 
             verificarUsernameDisponivel(usuarioAtualizado.getUsername());
         }
 
         usuario.setUsername(usuarioAtualizado.getUsername());
-
         usuario.setNome(usuarioAtualizado.getNome());
 
         return usuarioRepo.save(usuario);
