@@ -26,7 +26,7 @@ public interface TaxaRepo extends JpaRepository<Taxa, UUID> {
      * Quando fimVigencia for null, a taxa permanece vigente.
      */
     @Query("""
-            Select t FROM Taxa t
+            Select t FROM Taxa AS t
             WHERE t.inicioVigencia <= :data
                 AND(t.fimVigencia IS NULL OR t.fimVigencia > :data)
             """)
@@ -38,8 +38,8 @@ public interface TaxaRepo extends JpaRepository<Taxa, UUID> {
      * sobreposta ao intervalo informado.
      */
     @Query("""
-            SELECT t FROM Taxa t
-            WHERE t.inicioVigencia < :fim
+            SELECT t FROM Taxa AS t
+            WHERE (:fim IS NULL OR t.inicioVigencia < :fim)
                 AND (t.fimVigencia IS NULL OR t.fimVigencia > :inicio)
             """)
     List<Taxa> buscarTaxasComSobreposicao(

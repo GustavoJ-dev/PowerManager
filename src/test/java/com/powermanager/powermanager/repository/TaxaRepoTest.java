@@ -167,4 +167,48 @@ class TaxaRepoTest {
 
         assertThat(resultado).isEmpty();
     }
+
+    @Test
+    void deveEncontrarSobreposicaoQuandoFimForNulo() {
+
+        taxaRepo.saveAndFlush(criarTaxa(
+                LocalDateTime.of(2026, 1, 1, 0, 0),
+                null));
+
+        List<Taxa> resultado = taxaRepo.buscarTaxasComSobreposicao(
+                LocalDateTime.of(2026, 6, 1, 0, 0),
+                null);
+
+        assertThat(resultado).hasSize(1);
+    }
+
+    @Test
+    void deveEncontrarSobreposicaoQuandoFimEstiverPreenchido() {
+
+        Taxa salva = taxaRepo.saveAndFlush(criarTaxa(
+                LocalDateTime.of(2026, 1, 1, 0, 0),
+                null));
+
+        List<Taxa> resultado = taxaRepo.buscarTaxasComSobreposicao(
+                LocalDateTime.of(2026, 3, 1, 0, 0),
+                LocalDateTime.of(2026, 8, 1, 0, 0));
+
+        assertThat(resultado)
+                .extracting(Taxa::getId)
+                .containsExactly(salva.getId());
+    }
+
+    @Test
+    void naoDeveEncontrarSobreposicaoQuandoPeriodosApenasSeEncostarem() {
+
+        taxaRepo.saveAndFlush(criarTaxa(
+                LocalDateTime.of(2026, 1, 1, 0, 0),
+                LocalDateTime.of(2026, 6, 1, 0, 0)));
+
+        List<Taxa> resultado = taxaRepo.buscarTaxasComSobreposicao(
+                LocalDateTime.of(2026, 6, 1, 0, 0),
+                LocalDateTime.of(2026, 12, 1, 0, 0));
+
+        assertThat(resultado).isEmpty();
+    }
 }

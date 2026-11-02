@@ -1,8 +1,12 @@
 package com.powermanager.powermanager.services;
 
+import com.powermanager.powermanager.dto.taxa.TaxaAtualizacaoDTO;
+import com.powermanager.powermanager.dto.taxa.TaxaCadastroDTO;
+import com.powermanager.powermanager.dto.taxa.TaxaResponseDTO;
 import com.powermanager.powermanager.entity.Taxa;
 import com.powermanager.powermanager.exception.TaxaNotFoundException;
 import com.powermanager.powermanager.exception.TaxaValidationException;
+import com.powermanager.powermanager.mapper.TaxaMapper;
 import com.powermanager.powermanager.repository.TaxaRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,12 +21,20 @@ import java.util.List;
 public class TaxaService {
 
     private final TaxaRepo taxaRepo;
+    private final TaxaMapper taxaMapper;
 
     /**
      * Cadastra uma nova taxa.
      */
     @Transactional
-    public Taxa cadastrarNovaTaxa(Taxa taxa){
+    public TaxaResponseDTO cadastrarNovaTaxa(TaxaCadastroDTO taxaCadastroDTO){
+
+        if (taxaCadastroDTO == null){
+
+            throw new TaxaValidationException("a Taxa não pode ser nula");
+        }
+
+        Taxa taxa = taxaMapper.paraEntidade(taxaCadastroDTO);
 
         validarTaxa(taxa);
 
@@ -34,16 +46,19 @@ public class TaxaService {
         validarPeriodo(taxa.getInicioVigencia(), taxa.getFimVigencia());
         validarSobreposicao(taxa.getInicioVigencia(), taxa.getFimVigencia());
 
-        return taxaRepo.save(taxa);
+        Taxa taxaSalva = taxaRepo.save(taxa);
+
+        return taxaMapper.paraResponseDTO(taxaSalva);
     }
 
     /**
      * Retorna a taxa vigente neste momento.
      */
     @Transactional(readOnly = true)
-    public Taxa obterTaxaVigente(){
+    public TaxaResponseDTO obterTaxaVigente(){
 
         return obterTaxaNaData(LocalDateTime.now());
+
     }
 
 
@@ -51,24 +66,29 @@ public class TaxaService {
      * Retorna a taxa que estava vigente na data informada.
      */
     @Transactional(readOnly = true)
-    public Taxa obterTaxaNaData(LocalDateTime data){
+    public TaxaResponseDTO obterTaxaNaData(LocalDateTime data){
 
         if (data == null){
 
             throw new TaxaValidationException("A data para consulta não pode ser nula");
         }
 
-        return taxaRepo.buscarTaxaVigenteEm(data).orElseThrow(() ->
-                new TaxaNotFoundException("Nenhuma taxa vigente encontrada nessa data"));
+        Taxa taxa = taxaRepo.buscarTaxaVigenteEm(data).orElseThrow(
+                () -> new TaxaNotFoundException("Nenhuma taxa vigente encontrada nessa data"));
+
+        return taxaMapper.paraResponseDTO(taxa);
     }
 
     /**
      * Retorna todo o histórico de taxas.
      */
     @Transactional(readOnly = true)
-    public List<Taxa> listarHistorico() {
+    public List<TaxaResponseDTO> listarHistorico() {
 
-        return taxaRepo.findAll();
+        return taxaRepo.findAll()
+                .stream()
+                .map(taxaMapper::paraResponseDTO)
+                .toList();
     }
 
     /**
@@ -77,15 +97,23 @@ public class TaxaService {
      * A taxa antiga permanece armazenada para preservar o histórico.
      */
     @Transactional
-    public Taxa atualizarTaxa(Taxa novaTaxa){
+    public TaxaResponseDTO atualizarTaxa(TaxaAtualizacaoDTO novaTaxaDTO){
 
-        Taxa taxaAtual = obterTaxaVigente();
+        if (novaTaxaDTO == null){
 
-        LocalDateTime inicioNovaVigencia = novaTaxa.getInicioVigencia();
+            throw new TaxaValidationException("A taxa não pode ser nula");
+        }
+
+        LocalDateTime agora = LocalDateTime.now();
+
+        //precisa da entidade para encerrar a vigência
+        Taxa taxaAtual = buscarTaxaVigenteEntidade(agora);
+
+        LocalDateTime inicioNovaVigencia = novaTaxaDTO.inicioVigencia();
 
         if (inicioNovaVigencia == null){
 
-            inicioNovaVigencia = LocalDateTime.now();
+            inicioNovaVigencia = agora;
         }
 
         if (!inicioNovaVigencia.isAfter(taxaAtual.getInicioVigencia())){
@@ -93,20 +121,33 @@ public class TaxaService {
             throw new TaxaValidationException("A nova Taxa deve iniciar apos o inicio da taxa atual");
         }
 
-        /*
-         * Criamos um novo registro para preservar o histórico.
-         */
+        //criamos outra nova entidade para preservar histórico.
+
+        Taxa novaTaxa = new Taxa();
+
+        taxaMapper.atualizarEntidade(novaTaxaDTO, novaTaxa);
+
         novaTaxa.setInicioVigencia(inicioNovaVigencia);
         novaTaxa.setFimVigencia(null);
-        novaTaxa.setId(null);
 
         validarTaxa(novaTaxa);
+        validarPeriodo(novaTaxa.getInicioVigencia(), novaTaxa.getFimVigencia());
 
+        //encerra taxa anterior sem alterar valores monetários
         taxaAtual.setFimVigencia(inicioNovaVigencia);
-
         taxaRepo.save(taxaAtual);
 
-        return taxaRepo.save(novaTaxa);
+        Taxa taxaSalva = taxaRepo.save(novaTaxa);
+
+        return taxaMapper.paraResponseDTO(taxaSalva);
+    }
+
+    private Taxa buscarTaxaVigenteEntidade(LocalDateTime dateTime){
+
+        return taxaRepo.buscarTaxaVigenteEm(dateTime)
+                .orElseThrow(
+                        ()-> new TaxaNotFoundException("Nenhuma Taxa vigente encontrada nessa data:" +
+                                dateTime));
     }
 
     /**
@@ -119,15 +160,10 @@ public class TaxaService {
         }
 
         validarValor(taxa.getCustoPorUnidade(), "Custo por unidade");
-
         validarValor(taxa.getAluguelMedidor(), "Aluguel do medidor");
-
         validarValor(taxa.getTaxaServico(), "Taxa de serviço");
-
         validarValor(taxa.getImpostoServico(), "Imposto de serviço");
-
         validarValor(taxa.getCess(), "CESS");
-
         validarValor(taxa.getTaxaFixa(), "Taxa fixa");
     }
 
@@ -137,6 +173,7 @@ public class TaxaService {
     private void validarValor(BigDecimal valor, String campo) {
 
         if (valor == null) {
+
             throw new TaxaValidationException(campo + " não pode ser nulo");
         }
 

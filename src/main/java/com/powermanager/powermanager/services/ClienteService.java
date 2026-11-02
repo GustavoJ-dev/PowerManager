@@ -1,7 +1,10 @@
 package com.powermanager.powermanager.services;
 
+import com.powermanager.powermanager.dto.cliente.ClienteCadastroDTO;
+import com.powermanager.powermanager.dto.cliente.ClienteResponseDTO;
 import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.exception.ClienteNotFoundException;
+import com.powermanager.powermanager.mapper.ClienteMapper;
 import com.powermanager.powermanager.repository.ClienteRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -14,27 +17,36 @@ import java.util.UUID;
 public class ClienteService {
 
     private final ClienteRepo clienteRepo;
+    private final ClienteMapper clienteMapper;
 
-    public Cliente cadastrarCliente(Cliente cliente){
+    public ClienteResponseDTO cadastrarCliente(ClienteCadastroDTO clienteDTO){
 
-        return clienteRepo.save(cliente);
+        Cliente cliente = clienteMapper.paraEntidade(clienteDTO);
+
+        Cliente clienteSalvo = clienteRepo.save(cliente);
+
+        return clienteMapper.paraResponseDTO(clienteSalvo);
     }
 
-    public List<Cliente> listarClientes(){
+    public List<ClienteResponseDTO> listarClientes(){
 
-        return clienteRepo.findAll();
+        return clienteRepo.findAll().stream()
+                .map(clienteMapper::paraResponseDTO)
+                .toList();
     }
 
-    public Cliente buscarPorId(UUID id){
+    public ClienteResponseDTO buscarPorId(UUID id){
 
-        return clienteRepo.findById(id).orElseThrow(() ->
-                new ClienteNotFoundException("Cliente não encontrado"));
+        Cliente cliente = clienteRepo.findById(id)
+                .orElseThrow(()-> new ClienteNotFoundException("Cliente não encontrado."));
+
+        return clienteMapper.paraResponseDTO(cliente);
     }
 
     public void excluir(UUID id){
 
-        Cliente cliente = clienteRepo.findById(id).orElseThrow(()->
-                new ClienteNotFoundException("Cliente não encontrado"));
+        clienteRepo.findById(id).orElseThrow(
+                ()-> new ClienteNotFoundException("Cliente não encontrado"));
 
         clienteRepo.deleteById(id);
     }

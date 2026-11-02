@@ -1,11 +1,17 @@
 package com.powermanager.powermanager.services;
 
+import com.powermanager.powermanager.dto.usuario.UsuarioAtualizacaoDTO;
+import com.powermanager.powermanager.dto.usuario.UsuarioCadastroDTO;
+import com.powermanager.powermanager.dto.usuario.UsuarioResponseDTO;
 import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.entity.Usuario;
 import com.powermanager.powermanager.entity.enums.TipoUsuario;
+import com.powermanager.powermanager.exception.ClienteNotFoundException;
 import com.powermanager.powermanager.exception.UsernameAlreadyExistsException;
 import com.powermanager.powermanager.exception.UsuarioNotFoundException;
 import com.powermanager.powermanager.exception.UsuarioValidationException;
+import com.powermanager.powermanager.mapper.UsuarioMapper;
+import com.powermanager.powermanager.repository.ClienteRepo;
 import com.powermanager.powermanager.repository.UsuarioRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,86 +25,119 @@ import java.util.UUID;
 public class UsuarioService {
 
     private final UsuarioRepo usuarioRepo;
-    private final ClienteService clienteService;
+    private final ClienteRepo clienteRepo;
+    private final UsuarioMapper usuarioMapper;
 
     //cadastra novo usuario
     @Transactional
-    public Usuario cadastrarUsuario(Usuario usuario) {
+    public UsuarioResponseDTO cadastrarUsuario(UsuarioCadastroDTO dto) {
+
+        if (dto == null){
+
+            throw new UsuarioValidationException("Os dados do usuário são obrigatórios.");
+        }
+
+        verificarUsernameDisponivel(dto.username());
+
+        Usuario usuario = usuarioMapper.paraEntidade(dto);
 
         validarUsuario(usuario);
 
-        verificarUsernameDisponivel(usuario.getUsername());
+        //Cliente precisa estar associado a um cliente existente
+        if (dto.tipoUsuario() == TipoUsuario.CLIENTE){
 
-        //usuario CLIENTE precisa estar associado a um cliente
-        //ADMNISTRADOR não precisa estar associado a cliente
+            if (dto.clienteId() == null){
 
-        if (usuario.getTipoUsuario() == TipoUsuario.CLIENTE){
-
-            if (usuario.getCliente() == null || usuario.getCliente().getId() == null){
-
-                throw new UsuarioValidationException("Usuario CLIENTE deve estar associado a um cliente");
+                throw new UsuarioValidationException("Usuário CLIENTE deve estar associado a um cliente");
             }
 
-            Cliente cliente = clienteService.buscarPorId(usuario.getCliente().getId());
+            Cliente cliente = clienteRepo.findById(dto.clienteId())
+                    .orElseThrow(
+                            ()-> new ClienteNotFoundException("Cliente não encontrado."));
 
             usuario.setCliente(cliente);
         }
 
-        if (usuario.getTipoUsuario() == TipoUsuario.ADMINISTRADOR) {
+        //administrador não possui cliente associado
+        if (dto.tipoUsuario() == TipoUsuario.ADMINISTRADOR){
 
             usuario.setCliente(null);
         }
 
-        return usuarioRepo.save(usuario);
+        //manter até a etapa security
+        usuario.setPasswordHash(dto.senha());
+
+        Usuario usuarioSalvo = usuarioRepo.save(usuario);
+
+        return usuarioMapper.paraResponseDTO(usuarioSalvo);
+
     }
 
     //lista todos os usuarios
     @Transactional(readOnly = true)
-    public List<Usuario> listarUsuarios(){
+    public List<UsuarioResponseDTO> listarUsuarios(){
 
-        return usuarioRepo.findAll();
+        return usuarioRepo.findAll()
+                .stream()
+                .map(usuarioMapper::paraResponseDTO)
+                .toList();
     }
 
     //buscar pelo id
     @Transactional(readOnly = true)
-    public Usuario buscarPorId(UUID id){
+    public UsuarioResponseDTO buscarPorId(UUID id){
 
-        return usuarioRepo.findById(id).orElseThrow(() ->
+        Usuario usuario = usuarioRepo.findById(id).orElseThrow(() ->
                 new UsuarioNotFoundException("Nenhum Usuário com esse ID:" + id));
+
+        return usuarioMapper.paraResponseDTO(usuario);
     }
 
     //busca um usuario pelo username
     @Transactional(readOnly = true)
-    public Usuario buscaPorUsername(String username){
+    public UsuarioResponseDTO buscaPorUsername(String username){
 
-        return usuarioRepo.findByUsername(username).orElseThrow(() ->
+        Usuario usuario =  usuarioRepo.findByUsername(username).orElseThrow(() ->
                 new UsuarioNotFoundException("Usuário: " + username + " não encontrado."));
+
+        return usuarioMapper.paraResponseDTO(usuario);
     }
 
+    // Atualiza os campos permitidos do usuário
     @Transactional
-    public Usuario atualizarUsuario(UUID id, Usuario usuarioAtualizado) {
+    public UsuarioResponseDTO atualizarUsuario(UUID id, UsuarioAtualizacaoDTO usuarioAttDTO) {
 
-        if (usuarioAtualizado == null) {
+        if (usuarioAttDTO == null) {
 
             throw new UsuarioValidationException("Os dados do usuário para atualização não podem ser nulos.");
         }
 
-        Usuario usuario = buscarPorId(id);
+        Usuario usuario = usuarioRepo.findById(id)
+                .orElseThrow(
+                        ()-> new UsuarioNotFoundException(
+                                "Nenhum Usuário encontrado com esse ID: " + id));
 
-        if (usuarioAtualizado.getUsername() == null || usuarioAtualizado.getUsername().isBlank()) {
+
+        if (usuarioAttDTO.username() == null || usuarioAttDTO.username().isBlank()) {
 
             throw new UsuarioValidationException("O username é obrigatório");
         }
 
-        if (!usuario.getUsername().equals(usuarioAtualizado.getUsername())) {
+        if (usuarioAttDTO.nome() == null || usuarioAttDTO.nome().isBlank()) {
 
-            verificarUsernameDisponivel(usuarioAtualizado.getUsername());
+            throw new UsuarioValidationException("O nome é obrigatório.");
         }
 
-        usuario.setUsername(usuarioAtualizado.getUsername());
-        usuario.setNome(usuarioAtualizado.getNome());
+        if (!usuario.getUsername().equals(usuarioAttDTO.username())) {
 
-        return usuarioRepo.save(usuario);
+            verificarUsernameDisponivel(usuarioAttDTO.username());
+        }
+
+        usuarioMapper.atualizarEntidade(usuarioAttDTO, usuario);
+
+        Usuario usuarioSalvo = usuarioRepo.save(usuario);
+
+        return usuarioMapper.paraResponseDTO(usuarioSalvo);
 
     }
 

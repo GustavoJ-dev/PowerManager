@@ -9,5 +9,8 @@ import java.util.UUID;
 
 @Repository
 public interface MedidorRepo extends JpaRepository<Medidor, UUID> {
+
     Optional<Medidor> findByNumero(String numero);
+
+    boolean existsByClienteId(UUID clienteId);
 }

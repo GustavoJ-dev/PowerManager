@@ -1,11 +1,17 @@
 package com.powermanager.powermanager.services;
 
+import com.powermanager.powermanager.dto.usuario.UsuarioAtualizacaoDTO;
+import com.powermanager.powermanager.dto.usuario.UsuarioCadastroDTO;
+import com.powermanager.powermanager.dto.usuario.UsuarioResponseDTO;
 import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.entity.Usuario;
 import com.powermanager.powermanager.entity.enums.TipoUsuario;
+import com.powermanager.powermanager.exception.ClienteNotFoundException;
 import com.powermanager.powermanager.exception.UsernameAlreadyExistsException;
 import com.powermanager.powermanager.exception.UsuarioNotFoundException;
 import com.powermanager.powermanager.exception.UsuarioValidationException;
+import com.powermanager.powermanager.mapper.UsuarioMapper;
+import com.powermanager.powermanager.repository.ClienteRepo;
 import com.powermanager.powermanager.repository.UsuarioRepo;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,399 +33,342 @@ public class UsuarioServiceTest {
     private UsuarioRepo usuarioRepo;
 
     @Mock
-    private ClienteService clienteService;
+    private ClienteRepo clienteRepo;
+
+    @Mock
+    private UsuarioMapper usuarioMapper;
 
     @InjectMocks
     private UsuarioService usuarioService;
 
-    private Usuario criarUsuarioValido(){
+    @Test
+    void deveCadastrarUsuarioCliente() {
 
-        Usuario usuario = new Usuario();
+        UUID clienteId = UUID.randomUUID();
+        UUID usuarioId = UUID.randomUUID();
 
-        usuario.setUsername("usuario.teste");
-        usuario.setNome("Usuário Teste");
-        usuario.setPasswordHash("hash-teste");
-        usuario.setTipoUsuario(TipoUsuario.ADMINISTRADOR);
-        return usuario;
-    }
-
-    private Cliente criarClienteValido(){
+        UsuarioCadastroDTO usuarioCadastroDTO = new UsuarioCadastroDTO(
+                "joao",
+                "João Silva",
+                "senha123",
+                TipoUsuario.CLIENTE,
+                clienteId);
 
         Cliente cliente = new Cliente();
-        cliente.setId(UUID.randomUUID());
-        return cliente;
-    }
 
-    @Test
-    void deveCadastrarAdministrador(){
-
-        Usuario usuario = criarUsuarioValido();
-
-        when(usuarioRepo.findByUsername(usuario.getUsername())).thenReturn(Optional.empty());
-
-        when(usuarioRepo.save(any(Usuario.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        Usuario resultado = usuarioService.cadastrarUsuario(usuario);
-
-        assertNotNull(resultado);
-        assertEquals(TipoUsuario.ADMINISTRADOR, resultado.getTipoUsuario());
-        assertNull(resultado.getCliente());
-
-        verify(usuarioRepo).save(usuario);
-        verify(clienteService, never()).buscarPorId(any());
-    }
-
-    @Test
-    void deveCadastrarUsuarioClienteAssociadoAoClienteExistente(){
-
-        Usuario usuario = criarUsuarioValido();
+        Usuario usuario = new Usuario();
+        usuario.setUsername("joao");
+        usuario.setNome("João Silva");
+        usuario.setPasswordHash("senha123");
         usuario.setTipoUsuario(TipoUsuario.CLIENTE);
 
-        Cliente clienteRef = criarClienteValido();
-        Cliente clienteEncontrado = criarClienteValido();
-        usuario.setCliente(clienteRef);
+        Usuario usuarioSalvo = new Usuario();
 
-        when(usuarioRepo.findByUsername(usuario.getUsername())).thenReturn(Optional.empty());
+        UsuarioResponseDTO resposta = new UsuarioResponseDTO(
+                usuarioId,
+                "joao",
+                "João Silva",
+                TipoUsuario.CLIENTE,
+                clienteId);
 
-        when(clienteService.buscarPorId(clienteRef.getId())).thenReturn(clienteEncontrado);
+        when(usuarioRepo.findByUsername("joao")).thenReturn(Optional.empty());
+        when(usuarioMapper.paraEntidade(usuarioCadastroDTO)).thenReturn(usuario);
+        when(clienteRepo.findById(clienteId)).thenReturn(Optional.of(cliente));
+        when(usuarioRepo.save(usuario)).thenReturn(usuarioSalvo);
+        when(usuarioMapper.paraResponseDTO(usuarioSalvo)).thenReturn(resposta);
 
-        when(usuarioRepo.save(any(Usuario.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        UsuarioResponseDTO resultado = usuarioService.cadastrarUsuario(usuarioCadastroDTO);
 
-        Usuario resultado = usuarioService.cadastrarUsuario(usuario);
+        assertEquals(resposta, resultado);
 
-        assertNotNull(resultado);
-        assertSame(clienteEncontrado, resultado.getCliente());
+        verify(usuarioRepo).findByUsername("joao");
+        verify(clienteRepo).findById(clienteId);
+        verify(usuarioRepo).save(usuario);
+        verify(usuarioMapper).paraEntidade(usuarioCadastroDTO);
+        verify(usuarioMapper).paraResponseDTO(usuarioSalvo);
 
-        verify(clienteService).buscarPorId(clienteRef.getId());
+        assertSame(cliente, usuario.getCliente());
+    }
+
+    @Test
+    void deveCadastrarAdministradorSemCliente() {
+
+        UsuarioCadastroDTO dto = new UsuarioCadastroDTO(
+                "admin",
+                "Administrador",
+                "senha123",
+                TipoUsuario.ADMINISTRADOR,
+                null);
+
+        Usuario usuario = new Usuario();
+        usuario.setUsername("admin");
+        usuario.setNome("Administrador");
+        usuario.setPasswordHash("senha123");
+        usuario.setTipoUsuario(TipoUsuario.ADMINISTRADOR);
+
+        Usuario usuarioSalvo = new Usuario();
+        usuarioSalvo.setUsername("admin");
+        usuarioSalvo.setNome("Administrador");
+        usuarioSalvo.setPasswordHash("senha123");
+        usuarioSalvo.setTipoUsuario(TipoUsuario.ADMINISTRADOR);
+
+        UsuarioResponseDTO resposta = new UsuarioResponseDTO(
+                UUID.randomUUID(),
+                "admin",
+                "Administrador",
+                TipoUsuario.ADMINISTRADOR,
+                null);
+
+        when(usuarioRepo.findByUsername("admin")).thenReturn(Optional.empty());
+        when(usuarioMapper.paraEntidade(dto)).thenReturn(usuario);
+        when(usuarioRepo.save(usuario)).thenReturn(usuarioSalvo);
+        when(usuarioMapper.paraResponseDTO(usuarioSalvo)).thenReturn(resposta);
+
+        UsuarioResponseDTO resultado = usuarioService.cadastrarUsuario(dto);
+
+        assertEquals(resposta, resultado);
+        assertNull(usuario.getCliente());
+
+        verify(clienteRepo, never()).findById(any());
         verify(usuarioRepo).save(usuario);
     }
 
     @Test
-    void deveLancarExcecaoQuandoUsuarioForNulo(){
+    void deveLancarExcecaoAoCadastrarUsuarioNulo(){
 
         assertThrows(UsuarioValidationException.class,
                 ()-> usuarioService.cadastrarUsuario(null));
 
+        verifyNoInteractions(usuarioRepo, clienteRepo, usuarioMapper);
+    }
+
+    @Test
+    void deveLancarExcecaoQuandoUsernameJaExiste() {
+
+        UsuarioCadastroDTO dto = new UsuarioCadastroDTO(
+                "joao",
+                "João Silva",
+                "senha123",
+                TipoUsuario.ADMINISTRADOR,
+                null
+        );
+
+        when(usuarioRepo.findByUsername("joao"))
+                .thenReturn(Optional.of(new Usuario()));
+
+        assertThrows(
+                UsernameAlreadyExistsException.class,
+                () -> usuarioService.cadastrarUsuario(dto)
+        );
+
+        verify(usuarioRepo, never()).save(any());
+        verifyNoInteractions(clienteRepo, usuarioMapper);
+    }
+
+    @Test
+    void deveLancarExcecaoQuandoUsuarioClienteNaoPossuiClienteId() {
+
+        UsuarioCadastroDTO dto = new UsuarioCadastroDTO(
+                "joao",
+                "João Silva",
+                "senha123",
+                TipoUsuario.CLIENTE,
+                null
+        );
+
+        when(usuarioRepo.findByUsername("joao")).thenReturn(Optional.empty());
+        when(usuarioMapper.paraEntidade(dto)).thenReturn(new Usuario());
+
+        assertThrows(
+                UsuarioValidationException.class,
+                () -> usuarioService.cadastrarUsuario(dto)
+        );
+
+        verify(clienteRepo, never()).findById(any());
         verify(usuarioRepo, never()).save(any());
     }
 
     @Test
-    void deveLancarExcecaoQuandoUsernameForNulo(){
+    void deveLancarExcecaoQuandoClienteNaoExiste() {
 
-        Usuario usuario = criarUsuarioValido();
-        usuario.setUsername(null);
+        UUID clienteId = UUID.randomUUID();
 
-        assertThrows(UsuarioValidationException.class,
-                ()-> usuarioService.cadastrarUsuario(usuario));
+        UsuarioCadastroDTO dto = new UsuarioCadastroDTO(
+                "joao",
+                "João Silva",
+                "senha123",
+                TipoUsuario.CLIENTE,
+                clienteId);
 
-        verify(usuarioRepo, never()).findByUsername(anyString());
-        verify(usuarioRepo, never()).save(any(Usuario.class));
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoNomeForNulo() {
-
-        Usuario usuario = criarUsuarioValido();
-        usuario.setNome(null);
-
-        assertThrows(UsuarioValidationException.class,
-                () -> usuarioService.cadastrarUsuario(usuario));
-
-        verify(usuarioRepo, never()).findByUsername(anyString());
-        verify(usuarioRepo, never()).save(any(Usuario.class));
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoUsernameEstiverBranco(){
-
-        Usuario usuario = criarUsuarioValido();
-        usuario.setUsername("   ");
-
-        assertThrows(UsuarioValidationException.class,
-                ()->usuarioService.cadastrarUsuario(usuario));
-
-        verify(usuarioRepo, never()).findByUsername(anyString());
-        verify(usuarioRepo, never()).save(any(Usuario.class));
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoSenhaForNula() {
-
-        Usuario usuario = criarUsuarioValido();
-        usuario.setPasswordHash(null);
-
-        assertThrows(UsuarioValidationException.class,
-                () -> usuarioService.cadastrarUsuario(usuario));
-
-        verify(usuarioRepo, never()).findByUsername(anyString());
-        verify(usuarioRepo, never()).save(any(Usuario.class));
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoSenhaEstiverEmBranco() {
-
-        Usuario usuario = criarUsuarioValido();
-        usuario.setPasswordHash(" ");
-
-        assertThrows(UsuarioValidationException.class,
-                () -> usuarioService.cadastrarUsuario(usuario));
-
-        verify(usuarioRepo, never()).findByUsername(anyString());
-        verify(usuarioRepo, never()).save(any(Usuario.class));
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoNomeForBlank() {
-
-        Usuario usuario = criarUsuarioValido();
-        usuario.setNome("   ");
-
-        assertThrows(UsuarioValidationException.class,
-                () -> usuarioService.cadastrarUsuario(usuario));
-
-        verify(usuarioRepo, never()).save(any(Usuario.class));
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoTipoUsuarioForNulo() {
-
-        Usuario usuario = criarUsuarioValido();
-        usuario.setTipoUsuario(null);
-
-        assertThrows(UsuarioValidationException.class,
-                () -> usuarioService.cadastrarUsuario(usuario));
-
-        verify(usuarioRepo, never()).findByUsername(anyString());
-        verify(usuarioRepo, never()).save(any(Usuario.class));
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoUsernameJaExistirNoCadastro() {
-
-        Usuario usuario = criarUsuarioValido();
-
-        when(usuarioRepo.findByUsername(usuario.getUsername()))
-                .thenReturn(Optional.of(criarUsuarioValido()));
-
-        assertThrows(UsernameAlreadyExistsException.class,
-                () -> usuarioService.cadastrarUsuario(usuario));
-
-        verify(usuarioRepo, never()).save(any());
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoUsuarioClienteNaoPossuirCliente() {
-
-        Usuario usuario = criarUsuarioValido();
+        Usuario usuario = new Usuario();
+        usuario.setUsername("joao");
+        usuario.setNome("João Silva");
+        usuario.setPasswordHash("senha123");
         usuario.setTipoUsuario(TipoUsuario.CLIENTE);
-        usuario.setCliente(null);
 
-        when(usuarioRepo.findByUsername(usuario.getUsername()))
-                .thenReturn(Optional.empty());
+        when(usuarioRepo.findByUsername("joao")).thenReturn(Optional.empty());
+        when(usuarioMapper.paraEntidade(dto)).thenReturn(usuario);
+        when(clienteRepo.findById(clienteId)).thenReturn(Optional.empty());
 
-        assertThrows(UsuarioValidationException.class,
-                () -> usuarioService.cadastrarUsuario(usuario));
+        assertThrows(ClienteNotFoundException.class,
+                () -> usuarioService.cadastrarUsuario(dto));
 
-        verify(usuarioRepo, never()).save(any());
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoClienteNaoPossuirId() {
-
-        Usuario usuario = criarUsuarioValido();
-        usuario.setTipoUsuario(TipoUsuario.CLIENTE);
-        usuario.setCliente(new Cliente());
-
-        when(usuarioRepo.findByUsername(usuario.getUsername())).thenReturn(Optional.empty());
-
-        assertThrows(UsuarioValidationException.class,
-                () -> usuarioService.cadastrarUsuario(usuario));
-
-        verify(clienteService, never()).buscarPorId(any());
+        verify(usuarioRepo).findByUsername("joao");
+        verify(usuarioMapper).paraEntidade(dto);
+        verify(clienteRepo).findById(clienteId);
         verify(usuarioRepo, never()).save(any());
     }
 
     @Test
     void deveListarUsuarios() {
 
-        List<Usuario> usuarios = List.of(criarUsuarioValido(), criarUsuarioValido());
+        Usuario usuario1 = new Usuario();
+        Usuario usuario2 = new Usuario();
 
-        when(usuarioRepo.findAll()).thenReturn(usuarios);
+        UsuarioResponseDTO resposta1 = new UsuarioResponseDTO(
+                UUID.randomUUID(), "joao", "João",
+                TipoUsuario.CLIENTE, UUID.randomUUID()
+        );
 
-        List<Usuario> resultado = usuarioService.listarUsuarios();
+        UsuarioResponseDTO resposta2 = new UsuarioResponseDTO(
+                UUID.randomUUID(), "admin", "Administrador",
+                TipoUsuario.ADMINISTRADOR, null
+        );
 
-        assertEquals(2, resultado.size());
+        when(usuarioRepo.findAll()).thenReturn(List.of(usuario1, usuario2));
+        when(usuarioMapper.paraResponseDTO(usuario1)).thenReturn(resposta1);
+        when(usuarioMapper.paraResponseDTO(usuario2)).thenReturn(resposta2);
 
-        assertSame(usuarios, resultado);
+        List<UsuarioResponseDTO> resultado = usuarioService.listarUsuarios();
 
+        assertEquals(List.of(resposta1, resposta2), resultado);
         verify(usuarioRepo).findAll();
+        verify(usuarioMapper).paraResponseDTO(usuario1);
+        verify(usuarioMapper).paraResponseDTO(usuario2);
     }
 
     @Test
     void deveBuscarUsuarioPorId() {
 
         UUID id = UUID.randomUUID();
+        Usuario usuario = new Usuario();
 
-        Usuario usuario = criarUsuarioValido();
+        UsuarioResponseDTO resposta = new UsuarioResponseDTO(
+                id, "joao", "João",
+                TipoUsuario.CLIENTE, null
+        );
 
         when(usuarioRepo.findById(id)).thenReturn(Optional.of(usuario));
+        when(usuarioMapper.paraResponseDTO(usuario)).thenReturn(resposta);
 
-        Usuario resultado = usuarioService.buscarPorId(id);
-
-        assertSame(usuario, resultado);
+        assertEquals(resposta, usuarioService.buscarPorId(id));
 
         verify(usuarioRepo).findById(id);
+        verify(usuarioMapper).paraResponseDTO(usuario);
     }
 
     @Test
-    void deveLancarExcecaoQuandoIdNaoEncontrado() {
+    void deveLancarExcecaoAoBuscarUsuarioInexistente() {
 
         UUID id = UUID.randomUUID();
 
         when(usuarioRepo.findById(id)).thenReturn(Optional.empty());
 
-        assertThrows(UsuarioNotFoundException.class,
-                () -> usuarioService.buscarPorId(id));
+        assertThrows(
+                UsuarioNotFoundException.class,
+                () -> usuarioService.buscarPorId(id)
+        );
 
-        verify(usuarioRepo).findById(id);
-        verify(usuarioRepo, never()).save(any(Usuario.class));
+        verifyNoInteractions(usuarioMapper);
     }
 
     @Test
     void deveBuscarUsuarioPorUsername() {
 
-        Usuario usuario = criarUsuarioValido();
+        Usuario usuario = new Usuario();
 
-        when(usuarioRepo.findByUsername(usuario.getUsername())).thenReturn(Optional.of(usuario));
+        UsuarioResponseDTO resposta = new UsuarioResponseDTO(
+                UUID.randomUUID(), "joao", "João",
+                TipoUsuario.CLIENTE, null
+        );
 
-        Usuario resultado = usuarioService.buscaPorUsername(usuario.getUsername());
+        when(usuarioRepo.findByUsername("joao")).thenReturn(Optional.of(usuario));
+        when(usuarioMapper.paraResponseDTO(usuario)).thenReturn(resposta);
 
-        assertSame(usuario, resultado);
+        assertEquals(resposta, usuarioService.buscaPorUsername("joao"));
 
-        verify(usuarioRepo).findByUsername(usuario.getUsername());
+        verify(usuarioRepo).findByUsername("joao");
+        verify(usuarioMapper).paraResponseDTO(usuario);
     }
 
     @Test
-    void deveLancarExcecaoQuandoUsernameNaoForEncontrado() {
+    void deveLancarExcecaoAoBuscarUsernameInexistente() {
 
-        String username = "inexistente";
-
-        when(usuarioRepo.findByUsername(username)).thenReturn(Optional.empty());
-
-        assertThrows(UsuarioNotFoundException.class,
-                () -> usuarioService.buscaPorUsername(username));
-
-        verify(usuarioRepo).findByUsername(username);
-        verify(usuarioRepo, never()).save(any(Usuario.class));
-    }
-
-    @Test
-    void deveAtualizarNomeEUsername() {
-
-        UUID id = UUID.randomUUID();
-        Usuario usuarioExistente = criarUsuarioValido();
-
-        Usuario dadosAtualizados = new Usuario();
-        dadosAtualizados.setUsername("novo.username");
-        dadosAtualizados.setNome("Novo Nome");
-
-        when(usuarioRepo.findById(id)).thenReturn(Optional.of(usuarioExistente));
-
-        when(usuarioRepo.findByUsername("novo.username")).thenReturn(Optional.empty());
-
-        when(usuarioRepo.save(any(Usuario.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        Usuario resultado = usuarioService.atualizarUsuario(id, dadosAtualizados);
-
-        assertEquals("novo.username", resultado.getUsername());
-        assertEquals("Novo Nome", resultado.getNome());
-
-        verify(usuarioRepo).save(usuarioExistente);
-    }
-
-    @Test
-    void deveAtualizarNomeSemVerificarUsernameQuandoNaoMudar() {
-
-        UUID id = UUID.randomUUID();
-        Usuario usuarioExistente = criarUsuarioValido();
-
-        Usuario dadosAtualizados = new Usuario();
-        dadosAtualizados.setUsername(usuarioExistente.getUsername());
-        dadosAtualizados.setNome("Nome Alterado");
-
-        when(usuarioRepo.findById(id)).thenReturn(Optional.of(usuarioExistente));
-
-        when(usuarioRepo.save(any(Usuario.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        Usuario resultado = usuarioService.atualizarUsuario(id, dadosAtualizados);
-
-        assertEquals("Nome Alterado", resultado.getNome());
-
-        verify(usuarioRepo, never()).findByUsername(anyString());
-        verify(usuarioRepo).save(usuarioExistente);
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoUsernameAtualizadoForNulo() {
-
-        UUID id = UUID.randomUUID();
-        Usuario usuarioExistente = criarUsuarioValido();
-
-        Usuario dadosAtualizados = new Usuario();
-        dadosAtualizados.setUsername(null);
-
-        when(usuarioRepo.findById(id)).thenReturn(Optional.of(usuarioExistente));
-
-        assertThrows(UsuarioValidationException.class,
-                () -> usuarioService.atualizarUsuario(id, dadosAtualizados));
-
-        verify(usuarioRepo, never()).save(any());
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoUsernameAtualizadoEstiverEmBranco() {
-
-        UUID id = UUID.randomUUID();
-        Usuario usuarioExistente = criarUsuarioValido();
-
-        Usuario dadosAtualizados = new Usuario();
-        dadosAtualizados.setUsername(" ");
-
-        when(usuarioRepo.findById(id)).thenReturn(Optional.of(usuarioExistente));
-
-        assertThrows(UsuarioValidationException.class,
-                () -> usuarioService.atualizarUsuario(id, dadosAtualizados));
-
-        verify(usuarioRepo, never()).save(any());
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoNovoUsernameJaEstiverEmUso() {
-
-        UUID id = UUID.randomUUID();
-        Usuario usuarioExistente = criarUsuarioValido();
-
-        Usuario outroUsuario = criarUsuarioValido();
-        outroUsuario.setUsername("username.ocupado");
-
-        Usuario dadosAtualizados = new Usuario();
-        dadosAtualizados.setUsername("username.ocupado");
-        dadosAtualizados.setNome("Nome Novo");
-
-        when(usuarioRepo.findById(id)).thenReturn(Optional.of(usuarioExistente));
-
-        when(usuarioRepo.findByUsername("username.ocupado"))
-                .thenReturn(Optional.of(outroUsuario));
+        when(usuarioRepo.findByUsername("inexistente"))
+                .thenReturn(Optional.empty());
 
         assertThrows(
-                UsernameAlreadyExistsException.class,
-                () -> usuarioService.atualizarUsuario(id, dadosAtualizados));
+                UsuarioNotFoundException.class,
+                () -> usuarioService.buscaPorUsername("inexistente")
+        );
 
-        verify(usuarioRepo, never()).save(any());
+        verifyNoInteractions(usuarioMapper);
+    }
+
+    @Test
+    void deveAtualizarUsuario() {
+
+        UUID id = UUID.randomUUID();
+
+        UsuarioAtualizacaoDTO dto = new UsuarioAtualizacaoDTO(
+                "novoUsername",
+                "Novo Nome");
+
+        Usuario usuario = new Usuario();
+        usuario.setUsername("antigoUsername");
+        usuario.setNome("Nome Antigo");
+        usuario.setPasswordHash("hash-preservado");
+        usuario.setTipoUsuario(TipoUsuario.ADMINISTRADOR);
+
+        Usuario usuarioSalvo = new Usuario();
+
+        UsuarioResponseDTO resposta = new UsuarioResponseDTO(
+                id,
+                "novoUsername",
+                "Novo Nome",
+                TipoUsuario.ADMINISTRADOR,
+                null);
+
+        when(usuarioRepo.findById(id)).thenReturn(Optional.of(usuario));
+        when(usuarioRepo.findByUsername("novoUsername")).thenReturn(Optional.empty());
+
+        doAnswer(invocation -> {
+            UsuarioAtualizacaoDTO dados = invocation.getArgument(0);
+            Usuario alvo = invocation.getArgument(1);
+            alvo.setUsername(dados.username());
+            alvo.setNome(dados.nome());
+            return null;
+        }).when(usuarioMapper).atualizarEntidade(dto, usuario);
+
+        when(usuarioRepo.save(usuario)).thenReturn(usuarioSalvo);
+        when(usuarioMapper.paraResponseDTO(usuarioSalvo)).thenReturn(resposta);
+
+        assertEquals(resposta, usuarioService.atualizarUsuario(id, dto));
+
+        assertEquals("hash-preservado", usuario.getPasswordHash());
+        assertEquals(TipoUsuario.ADMINISTRADOR, usuario.getTipoUsuario());
+
+        verify(usuarioMapper).atualizarEntidade(dto, usuario);
+        verify(usuarioRepo).save(usuario);
+    }
+
+    @Test
+    void deveLancarExcecaoAoAtualizarUsuarioNulo() {
+
+        assertThrows(UsuarioValidationException.class,
+                () -> usuarioService.atualizarUsuario(UUID.randomUUID(), null));
+
+        verifyNoInteractions(usuarioRepo, clienteRepo, usuarioMapper);
     }
 
     @Test
@@ -429,52 +378,60 @@ public class UsuarioServiceTest {
 
         when(usuarioRepo.findById(id)).thenReturn(Optional.empty());
 
-        Usuario dadosAtualizados = new Usuario();
-        dadosAtualizados.setUsername("novo.username");
-        dadosAtualizados.setNome("Novo Nome");
+        assertThrows(
+                UsuarioNotFoundException.class,
+                () -> usuarioService.atualizarUsuario(
+                        id,
+                        new UsuarioAtualizacaoDTO("novo", "Novo Nome")));
 
-        assertThrows(UsuarioNotFoundException.class,
-                () -> usuarioService.atualizarUsuario(id, dadosAtualizados));
+        verifyNoInteractions(usuarioMapper);
+    }
 
+    @Test
+    void deveLancarExcecaoQuandoUsernameAtualizadoJaExiste() {
+
+        UUID id = UUID.randomUUID();
+
+        Usuario usuario = new Usuario();
+        usuario.setUsername("antigo");
+
+        UsuarioAtualizacaoDTO dto = new UsuarioAtualizacaoDTO(
+                "ocupado",
+                "Novo Nome");
+
+        when(usuarioRepo.findById(id)).thenReturn(Optional.of(usuario));
+        when(usuarioRepo.findByUsername("ocupado"))
+                .thenReturn(Optional.of(new Usuario()));
+
+        assertThrows(UsernameAlreadyExistsException.class,
+                () -> usuarioService.atualizarUsuario(id, dto));
+
+        verify(usuarioMapper, never()).atualizarEntidade(any(), any());
         verify(usuarioRepo, never()).save(any());
     }
 
     @Test
-    void deveAutenticarUsuarioComCredenciaisValidas() {
+    void deveAutenticarUsuario() {
 
-        Usuario usuario = criarUsuarioValido();
+        Usuario usuario = new Usuario();
+        usuario.setPasswordHash("senha-atual");
 
-        when(usuarioRepo.findByUsername(usuario.getUsername())).thenReturn(Optional.of(usuario));
+        when(usuarioRepo.findByUsername("joao")).thenReturn(Optional.of(usuario));
 
-        Usuario resultado = usuarioService.autenticar(usuario.getUsername(), usuario.getPasswordHash());
-
-        assertSame(usuario, resultado);
-
-        verify(usuarioRepo).findByUsername(usuario.getUsername());
-        verify(usuarioRepo, never()).save(any(Usuario.class));
+        assertSame(usuario, usuarioService.autenticar("joao", "senha-atual"));
     }
 
     @Test
     void deveLancarExcecaoQuandoSenhaEstiverIncorreta() {
 
-        Usuario usuario = criarUsuarioValido();
+        Usuario usuario = new Usuario();
+        usuario.setPasswordHash("senha-correta");
 
-        when(usuarioRepo.findByUsername(usuario.getUsername())).thenReturn(Optional.of(usuario));
+        when(usuarioRepo.findByUsername("joao")).thenReturn(Optional.of(usuario));
 
-        assertThrows(UsuarioValidationException.class, () -> usuarioService.autenticar(
-                        usuario.getUsername(), "senha-incorreta"));
+        assertThrows(
+                UsuarioValidationException.class,
+                () -> usuarioService.autenticar("joao", "senha-incorreta"));
     }
 
-    @Test
-    void deveLancarExcecaoAoAutenticarUsuarioInexistente() {
-
-        when(usuarioRepo.findByUsername("inexistente")).thenReturn(Optional.empty());
-
-        assertThrows(UsuarioValidationException.class, () -> usuarioService.autenticar(
-                        "inexistente",
-                        "qualquer-senha"));
-
-        verify(usuarioRepo).findByUsername("inexistente");
-        verify(usuarioRepo, never()).save(any(Usuario.class));
-    }
 }

@@ -1,14 +1,20 @@
 package com.powermanager.powermanager.services;
 
+import com.powermanager.powermanager.dto.fatura.FaturaResponseDTO;
+import com.powermanager.powermanager.dto.medidor.MedidorCadastroDTO;
+import com.powermanager.powermanager.dto.medidor.MedidorResponseDTO;
+import com.powermanager.powermanager.dto.taxa.TaxaCadastroDTO;
+import com.powermanager.powermanager.dto.taxa.TaxaResponseDTO;
 import com.powermanager.powermanager.entity.Fatura;
 import com.powermanager.powermanager.entity.Medidor;
 import com.powermanager.powermanager.entity.Taxa;
 import com.powermanager.powermanager.entity.enums.StatusFatura;
-import com.powermanager.powermanager.exception.FaturaAlreadyExistsException;
-import com.powermanager.powermanager.exception.FaturaAlreadyPaidException;
-import com.powermanager.powermanager.exception.FaturaNotFoundException;
-import com.powermanager.powermanager.exception.FaturaValidationException;
+import com.powermanager.powermanager.exception.*;
+import com.powermanager.powermanager.mapper.FaturaMapper;
+import com.powermanager.powermanager.mapper.MedidorMapper;
+import com.powermanager.powermanager.mapper.TaxaMapper;
 import com.powermanager.powermanager.repository.FaturaRepo;
+import com.powermanager.powermanager.repository.MedidorRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +32,9 @@ public class FaturaService {
     private final FaturaRepo faturaRepo;
     private final MedidorService medidorService;
     private final TaxaService taxaService;
+    private final FaturaMapper faturaMapper;
+    private final TaxaMapper taxaMapper;
+    private final MedidorRepo medidorRepo;
 
 
     //Calcula uma fatura, utilizando taxa vigente
@@ -34,22 +43,47 @@ public class FaturaService {
 
         validarUnidades(unidadesConsumidas);
 
-        Taxa taxa= taxaService.obterTaxaVigente();
+        TaxaResponseDTO taxaResponse = taxaService.obterTaxaVigente();
+
+        TaxaCadastroDTO taxaCadastroDTO = new TaxaCadastroDTO(
+                taxaResponse.custoPorUnidade(),
+                taxaResponse.aluguelMedidor(),
+                taxaResponse.taxaServico(),
+                taxaResponse.impostoServico(),
+                taxaResponse.cess(),
+                taxaResponse.taxaFixa(),
+                taxaResponse.inicioVigencia(),
+                taxaResponse.fimVigencia());
+
+        Taxa taxa = taxaMapper.paraEntidade(taxaCadastroDTO);
 
         return calcularValorTotal(unidadesConsumidas, taxa);
     }
 
     //gera nova fatura para medidor
     @Transactional
-    public Fatura gerarFatura(UUID medidorId, LocalDate competencia, BigDecimal unidadesConsumidas){
+    public FaturaResponseDTO gerarFatura(UUID medidorId, LocalDate competencia, BigDecimal unidadesConsumidas){
 
         validarDadosFatura(medidorId, competencia, unidadesConsumidas);
 
-        Medidor medidor = medidorService.buscarPorId(medidorId);
+        Medidor medidor = medidorRepo.findById(medidorId).orElseThrow(
+                ()-> new MedidorNotFoundException("Medidor não encontrado: " + medidorId));
 
         verificarFaturaExistente(medidor, competencia);
 
-        Taxa taxa = taxaService.obterTaxaVigente();
+        TaxaResponseDTO taxaResponse = taxaService.obterTaxaVigente();
+
+        TaxaCadastroDTO taxaCadastroDTO = new TaxaCadastroDTO(
+                taxaResponse.custoPorUnidade(),
+                taxaResponse.aluguelMedidor(),
+                taxaResponse.taxaServico(),
+                taxaResponse.impostoServico(),
+                taxaResponse.cess(),
+                taxaResponse.taxaFixa(),
+                taxaResponse.inicioVigencia(),
+                taxaResponse.fimVigencia());
+
+        Taxa taxa = taxaMapper.paraEntidade(taxaCadastroDTO);
 
         BigDecimal valorTotal = calcularValorTotal(unidadesConsumidas, taxa);
 
@@ -74,69 +108,91 @@ public class FaturaService {
         fatura.setStatusFatura(StatusFatura.PENDENTE);
         fatura.setMedidor(medidor);
 
-        return faturaRepo.save(fatura);
+        Fatura faturaSalva =faturaRepo.save(fatura);
+
+        return faturaMapper.paraResponseDTO(faturaSalva);
     }
 
     //lista todas as faturas
     @Transactional(readOnly = true)
-    public List<Fatura> listarFaturas(){
+    public List<FaturaResponseDTO> listarFaturas(){
 
-        return faturaRepo.findAll();
+        return faturaRepo.findAll()
+                .stream()
+                .map(faturaMapper::paraResponseDTO)
+                .toList();
     }
 
     //lista todas faturas de um medidor
     @Transactional(readOnly = true)
-    public List<Fatura> listarPorMedidor(UUID id){
+    public List<FaturaResponseDTO> listarPorMedidor(UUID id){
 
-        Medidor medidor = medidorService.buscarPorId(id);
+        Medidor medidor = medidorRepo.findById(id).orElseThrow(
+                ()-> new MedidorNotFoundException("Medidor não encontrado: " + id));
 
-        return faturaRepo.findByMedidor(medidor);
+        return faturaRepo.findByMedidor(medidor)
+                .stream()
+                .map(faturaMapper::paraResponseDTO)
+                .toList();
     }
 
     //busca determinada fatura de um medidor em uma competência especifíca
     @Transactional(readOnly = true)
-    public Fatura buscarPorMedidorEMes(UUID id, LocalDate competencia){
+    public FaturaResponseDTO buscaPorMedidorECompetencia(UUID id, LocalDate competencia){
 
-        Medidor medidor = medidorService.buscarPorId(id);
+        Medidor medidor = medidorRepo.findById(id).orElseThrow(
+                ()-> new MedidorNotFoundException("Medidor não encontrado: " + id));
 
-        return faturaRepo.findByMedidorAndCompetencia(medidor, competencia)
+        Fatura fatura = faturaRepo.findByMedidorAndCompetencia(medidor, competencia)
                 .orElseThrow(() ->
                         new FaturaNotFoundException("Fatura não encotrada para o medidor: " + id +
                                 " na competência: " + competencia));
+
+        return faturaMapper.paraResponseDTO(fatura);
 
     }
 
     //retorna o historica de faturas de um medidor pelo mais recente
     @Transactional(readOnly = true)
-    public List<Fatura> listarHistoricoPorMedidor(UUID id){
+    public List<FaturaResponseDTO> listarHistoricoPorMedidor(UUID id){
 
-        Medidor medidor = medidorService.buscarPorId(id);
+        Medidor medidor = medidorRepo.findById(id).orElseThrow(
+                ()-> new MedidorNotFoundException("Medidor não encontrado: " + id));
 
-        return faturaRepo.findByMedidorOrderByCompetenciaDesc(medidor);
+        return faturaRepo.findByMedidorOrderByCompetenciaDesc(medidor)
+                .stream()
+                .map(faturaMapper::paraResponseDTO)
+                .toList();
     }
 
     //busca fatura pelo id
     @Transactional(readOnly = true)
-    public Fatura obterDetalhesDaFatura(UUID id){
+    public FaturaResponseDTO obterDetalhesDaFatura(UUID id){
 
-        return faturaRepo.findById(id).orElseThrow(() ->
-                new FaturaNotFoundException("Fatura não encontrada: " + id));
+        Fatura fatura = faturaRepo.findById(id).orElseThrow(
+                () -> new FaturaNotFoundException("Fatura não encontrada: " + id));
+
+        return faturaMapper.paraResponseDTO(fatura);
     }
 
     //Marca uma Fatura como paga
     @Transactional
-    public Fatura pagarFatura(UUID id){
+    public FaturaResponseDTO pagarFatura(UUID id){
 
-        Fatura fatura = obterDetalhesDaFatura(id);
+        Fatura fatura = faturaRepo.findById(id)
+                .orElseThrow(
+                        ()-> new FaturaNotFoundException("Fatura não encontrada ID: " + id));
 
         if (fatura.getStatusFatura() == StatusFatura.PAGO){
 
-            throw new FaturaAlreadyPaidException("Essa fatura já está paga.");
+            throw new FaturaAlreadyPaidException("Essa Fatura já está paga");
         }
 
         fatura.setStatusFatura(StatusFatura.PAGO);
 
-        return faturaRepo.save(fatura);
+        Fatura faturaSalva = faturaRepo.save(fatura);
+
+        return faturaMapper.paraResponseDTO(faturaSalva);
     }
 
     /*
