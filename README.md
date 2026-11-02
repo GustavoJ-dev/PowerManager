@@ -6,6 +6,21 @@
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+
+## 📚 Navegação
+
+- [Sobre o projeto](#-sobre-o-projeto)
+- [Funcionalidades e regras de negócio](#-funcionalidades-do-domínio)
+- [Modelo de domínio](#-modelo-de-domínio-entidades)
+- [DTOs e mapeamento](#-dtos-e-mapeamento)
+- [Repositórios](#-repositórios)
+- [Services e métodos](#-services-e-métodos)
+- [Tecnologias e arquitetura](#-tecnologias)
+- [Execução](#-pré-requisitos)
+- [Testes e cobertura](#-testes-e-cobertura-de-código)
+- [Roadmap](#-roadmap)
+
+
 ## 📌 Sobre o projeto
 
 O **PowerManager API** é um backend desenvolvido em Java e Spring Boot para organizar o gerenciamento de clientes, medidores de energia, tarifas, faturas e usuários em um sistema de faturamento de energia elétrica.
@@ -141,7 +156,7 @@ Representa uma conta de acesso ao sistema.
 - Usuários `CLIENTE` precisam estar vinculados a um cliente existente.
 - Usuários `ADMINISTRADOR` são armazenados sem vínculo com cliente.
 
-> **Nota de segurança:** o método de autenticação atual compara o valor recebido com o campo armazenado e ainda não utiliza `PasswordEncoder` ou Spring Security. A autenticação é provisória e precisa ser aprimorada antes de qualquer uso em produção.
+> **Atenção — segurança:** no estado atual, `UsuarioService` grava a senha recebida diretamente em `passwordHash` e a autenticação compara os valores em texto puro. Portanto, esse campo ainda **não contém um hash**. Não utilize o fluxo de usuários/autenticação em produção nem armazene senhas reais até implementar hash seguro com `PasswordEncoder` (por exemplo, BCrypt), autenticação/autorização com Spring Security e os testes correspondentes.
 
 ## 📦 DTOs e mapeamento
 
@@ -164,6 +179,53 @@ Os DTOs ficam em `com.powermanager.powermanager.dto` e definem os dados aceitos 
 - Componentes monetários da taxa utilizam `@DecimalMin` e `@Digits`, impedindo valores negativos e limitando a precisão a 8 dígitos inteiros e 2 decimais.
 
 Os DTOs definem validações declarativas; os services continuam responsáveis por regras de negócio, como existência de relacionamentos, unicidade e consistência de períodos.
+
+**Importante nesta etapa:** como os controllers ainda não existem, as anotações do Bean Validation não são acionadas automaticamente por uma requisição HTTP. Quando os endpoints forem criados, será necessário aplicar `@Valid` nos parâmetros dos controllers. Chamadas diretas aos services também não executam essas anotações automaticamente; por isso, os services já possuem validações próprias para regras essenciais.
+
+### Exemplos de payloads dos DTOs
+
+Os exemplos abaixo ilustram os objetos recebidos pelos services. Ainda não representam endpoints HTTP disponíveis.
+
+**Cadastro de cliente — `ClienteCadastroDTO`**
+
+```json
+{
+  "nome": "Maria Silva",
+  "endereco": "Rua das Flores, 100",
+  "cidade": "Paramirim",
+  "estado": "BA",
+  "email": "maria@example.com",
+  "telefone": "(77) 99999-9999"
+}
+```
+
+**Cadastro de medidor — `MedidorCadastroDTO`**
+
+```json
+{
+  "numero": "MED-0001",
+  "localizacao": "Residencial",
+  "tipo": "Digital",
+  "codigoFase": "MONOFASICO",
+  "tipoFatura": "RESIDENCIAL",
+  "dias": 30,
+  "clienteId": "00000000-0000-0000-0000-000000000000"
+}
+```
+
+**Cadastro de usuário — `UsuarioCadastroDTO`**
+
+```json
+{
+  "username": "maria.silva",
+  "nome": "Maria Silva",
+  "senha": "senha-de-exemplo",
+  "tipoUsuario": "CLIENTE",
+  "clienteId": "00000000-0000-0000-0000-000000000000"
+}
+```
+
+> Os valores são ilustrativos. Para usuário do tipo `CLIENTE`, informe o UUID de um cliente existente. Não reutilize a senha de exemplo nem envie senhas reais em documentação ou repositórios.
 
 ### Mappers
 
@@ -202,77 +264,77 @@ Os repositórios ficam em `com.powermanager.powermanager.repository` e estendem 
 
 ## ⚙️ Services e métodos
 
-Os services ficam em `com.powermanager.powermanager.services`. Eles coordenam os repositórios, aplicam regras de negócio e lançam exceções específicas quando uma operação não pode ser concluída.
+Os services ficam em `com.powermanager.powermanager.services`. Eles coordenam repositories e mappers, aplicam as regras de negócio e retornam DTOs de resposta sempre que a operação produz um recurso. Exceções específicas representam situações inválidas ou recursos não encontrados.
 
 ### `ClienteService`
 
-Gerencia operações de cadastro e consulta de clientes.
+Gerencia cadastro, consulta, listagem e exclusão de clientes.
 
-| Método | Descrição |
-| --- | --- |
-| `cadastrarCliente(ClienteCadastroDTO cliente)` | Converte os dados de entrada, persiste o cliente e retorna `ClienteResponseDTO`. |
-| `listarClientes()` | Retorna todos os clientes como lista de `ClienteResponseDTO`. |
-| `buscarPorId(UUID id)` | Busca um cliente pelo UUID e retorna `ClienteResponseDTO`; lança `ClienteNotFoundException` se não existir. |
-| `excluir(UUID id)` | Verifica a existência do cliente e solicita sua exclusão; lança `ClienteNotFoundException` quando não encontrado. |
+| Método | Retorno | Descrição |
+| --- | --- | --- |
+| `cadastrarCliente(ClienteCadastroDTO clienteDTO)` | `ClienteResponseDTO` | Converte o DTO em entidade, persiste e converte o resultado para resposta. |
+| `listarClientes()` | `List<ClienteResponseDTO>` | Lista os clientes cadastrados. |
+| `buscarPorId(UUID id)` | `ClienteResponseDTO` | Busca pelo UUID; lança `ClienteNotFoundException` se não existir. |
+| `excluir(UUID id)` | `void` | Verifica a existência e exclui o cliente; lança `ClienteNotFoundException` se não existir. |
 
 ### `MedidorService`
 
-Gerencia o cadastro, a consulta e a atualização dos dados de um medidor.
+Gerencia cadastro, consulta, atualização e exclusão de medidores.
 
-| Método | Descrição |
-| --- | --- |
-| `cadastrarMedidor(MedidorCadastroDTO medidor)` | Valida número e vínculo, converte o DTO, persiste o medidor e retorna `MedidorResponseDTO`. |
-| `buscarPorNumero(String numero)` | Busca pelo número único e retorna `MedidorResponseDTO`; lança `MedidorNotFoundException` se não encontrar. |
-| `buscarPorId(UUID id)` | Busca pelo UUID e retorna `MedidorResponseDTO`; lança `MedidorNotFoundException` se não encontrar. |
-| `listarMedidores()` | Lista todos os medidores como DTOs de resposta. |
-| `atualizarMedidor(UUID id, MedidorAtualizacaoDTO dados)` | Atualiza os campos permitidos, verifica conflito de número e retorna o DTO atualizado. |
-| `excluirMedidor(UUID medidorId)` | Verifica a existência do medidor e solicita sua exclusão. |
+| Método | Retorno | Descrição |
+| --- | --- | --- |
+| `cadastrarMedidor(MedidorCadastroDTO medidorDTO)` | `MedidorResponseDTO` | Verifica duplicidade do número, confirma que o cliente existe e que ainda não possui medidor; associa e persiste o medidor. |
+| `buscarPorNumero(String numero)` | `MedidorResponseDTO` | Busca pelo número; lança `MedidorNotFoundException` se não encontrar. |
+| `buscarPorId(UUID id)` | `MedidorResponseDTO` | Busca pelo UUID; lança `MedidorNotFoundException` se não encontrar. |
+| `listarMedidores()` | `List<MedidorResponseDTO>` | Lista os medidores cadastrados. |
+| `atualizarMedidor(UUID id, MedidorAtualizacaoDTO medidorAttDTO)` | `MedidorResponseDTO` | Localiza o medidor, impede que seu número seja usado por outro registro, aplica o mapper e persiste a alteração. |
+| `excluirMedidor(UUID medidorId)` | `void` | Confirma a existência e exclui o medidor; lança `MedidorNotFoundException` se não existir. |
 
 ### `TaxaService`
 
-Centraliza a validação de valores e períodos tarifários e mantém o histórico das taxas.
+Centraliza a validação dos componentes monetários e dos períodos de vigência, preservando o histórico tarifário.
 
-| Método | Descrição |
-| --- | --- |
-| `cadastrarNovaTaxa(TaxaCadastroDTO taxa)` | Valida os componentes monetários e a vigência. Se o início não for informado, utiliza a data/hora atual; rejeita períodos inválidos ou sobrepostos. |
-| `obterTaxaVigente()` | Retorna a taxa vigente no momento da chamada. |
-| `obterTaxaNaData(LocalDateTime data)` | Retorna a taxa vigente na data indicada; valida data nula e lança `TaxaNotFoundException` se não houver taxa vigente. |
-| `listarHistorico()` | Retorna os registros de taxa armazenados. |
-| `atualizarTaxa(TaxaAtualizacaoDTO novaTaxa)` | Encerra a vigência da taxa atual e cria um novo registro, preservando o histórico; exige que a nova vigência comece depois do início da taxa atual. |
+| Método | Retorno | Descrição |
+| --- | --- | --- |
+| `cadastrarNovaTaxa(TaxaCadastroDTO taxaCadastroDTO)` | `TaxaResponseDTO` | Valida os valores e a vigência; usa a data/hora atual quando o início não é informado e rejeita períodos inválidos ou sobrepostos. |
+| `obterTaxaVigente()` | `TaxaResponseDTO` | Retorna a taxa vigente no momento da consulta. |
+| `obterTaxaNaData(LocalDateTime data)` | `TaxaResponseDTO` | Retorna a taxa vigente na data informada; rejeita data nula e lança `TaxaNotFoundException` quando não há taxa. |
+| `listarHistorico()` | `List<TaxaResponseDTO>` | Lista o histórico de taxas convertido para DTOs. |
+| `atualizarTaxa(TaxaAtualizacaoDTO novaTaxaDTO)` | `TaxaResponseDTO` | Encerra a vigência da taxa atual e cria outra, sem apagar o registro anterior; a nova vigência deve começar após o início da taxa atual. |
 
-O service também contém validações internas para garantir que a taxa e os valores monetários não sejam nulos ou negativos, que o fim seja posterior ao início e que os períodos não se sobreponham. As operações de escrita são transacionais.
+As operações de escrita são transacionais. A atualização mantém os valores históricos da taxa anterior e define o fim de sua vigência no início da nova taxa.
 
 ### `FaturaService`
 
-Coordena o cálculo, a emissão, a consulta e a mudança de status das faturas.
+Coordena o cálculo, a geração, a consulta e o pagamento das faturas.
 
-| Método | Descrição |
-| --- | --- |
-| `calcularFatura(BigDecimal unidadesConsumidas)` | Calcula o valor com a taxa vigente, sem persistir uma fatura; rejeita consumo nulo ou negativo. |
-| `gerarFatura(UUID medidorId, LocalDate competencia, BigDecimal unidadesConsumidas)` | Valida os dados, localiza o medidor, impede duplicidade por medidor/competência, obtém a taxa vigente, calcula o total e salva a fatura como `PENDENTE` com snapshot tarifário. |
-| `listarFaturas()` | Retorna todas as faturas. |
-| `listarPorMedidor(UUID id)` | Retorna as faturas de um medidor. |
-| `buscaPorMedidorECompetencia(UUID id, LocalDate competencia)` | Busca a fatura de um medidor para a competência informada e retorna `FaturaResponseDTO`; lança `FaturaNotFoundException` se não existir. |
-| `listarHistoricoPorMedidor(UUID id)` | Retorna as faturas do medidor por competência decrescente. |
-| `obterDetalhesDaFatura(UUID id)` | Busca uma fatura pelo UUID; lança `FaturaNotFoundException` se não existir. |
-| `pagarFatura(UUID id)` | Altera o status para `PAGO`; lança `FaturaAlreadyPaidException` se a fatura já estiver paga. |
+| Método | Retorno | Descrição |
+| --- | --- | --- |
+| `calcularFatura(BigDecimal unidadesConsumidas)` | `BigDecimal` | Calcula o total usando a taxa vigente, sem persistir uma fatura; rejeita consumo nulo ou negativo. |
+| `gerarFatura(UUID medidorId, LocalDate competencia, BigDecimal unidadesConsumidas)` | `FaturaResponseDTO` | Valida os dados, verifica o medidor, impede duplicidade por medidor/competência, calcula o total e persiste a fatura como `PENDENTE`, incluindo snapshot dos componentes tarifários. |
+| `listarFaturas()` | `List<FaturaResponseDTO>` | Lista todas as faturas. |
+| `listarPorMedidor(UUID id)` | `List<FaturaResponseDTO>` | Verifica o medidor e lista suas faturas. |
+| `buscaPorMedidorECompetencia(UUID id, LocalDate competencia)` | `FaturaResponseDTO` | Busca a fatura do medidor na competência informada. |
+| `listarHistoricoPorMedidor(UUID id)` | `List<FaturaResponseDTO>` | Lista as faturas do medidor por competência decrescente. |
+| `obterDetalhesDaFatura(UUID id)` | `FaturaResponseDTO` | Busca uma fatura pelo UUID. |
+| `pagarFatura(UUID id)` | `FaturaResponseDTO` | Altera o status para `PAGO` e retorna a fatura atualizada; lança `FaturaAlreadyPaidException` se já estiver paga. |
 
-A geração valida a presença do identificador do medidor e da competência. A prevenção de duplicidade também lança `FaturaAlreadyExistsException`; dados inválidos geram `FaturaValidationException`.
+A geração pode lançar `MedidorNotFoundException`, `FaturaAlreadyExistsException` ou `FaturaValidationException`. As consultas de fatura e medidor lançam suas respectivas exceções quando o recurso não existe.
 
 ### `UsuarioService`
 
-Gerencia contas de usuário, valida unicidade do username e aplica as regras de associação com clientes.
+Gerencia contas, unicidade do username e associação de usuários do tipo cliente.
 
-| Método | Descrição |
-| --- | --- |
-| `cadastrarUsuario(UsuarioCadastroDTO usuario)` | Valida os campos obrigatórios, verifica a disponibilidade do username e aplica a regra de associação conforme o tipo de usuário. |
-| `listarUsuarios()` | Retorna todos os usuários cadastrados. |
-| `buscarPorId(UUID id)` | Busca pelo UUID; lança `UsuarioNotFoundException` se não existir. |
-| `buscaPorUsername(String username)` | Busca pelo username; lança `UsuarioNotFoundException` se não existir. |
-| `atualizarUsuario(UUID id, UsuarioAtualizacaoDTO dados)` | Atualiza username e nome, verificando se o novo username já pertence a outro usuário. |
-| `autenticar(String username, String passwordHash)` | Procura o usuário e compara o valor recebido com o campo armazenado; retorna erro genérico quando usuário/senha não correspondem. A implementação é provisória, conforme a nota de segurança acima. |
+| Método | Retorno | Descrição |
+| --- | --- | --- |
+| `cadastrarUsuario(UsuarioCadastroDTO dto)` | `UsuarioResponseDTO` | Verifica os dados e a disponibilidade do username, valida o tipo e a associação com cliente, persiste e retorna DTO sem senha/hash. |
+| `listarUsuarios()` | `List<UsuarioResponseDTO>` | Lista usuários sem expor senha/hash. |
+| `buscarPorId(UUID id)` | `UsuarioResponseDTO` | Busca pelo UUID; lança `UsuarioNotFoundException` se não existir. |
+| `buscaPorUsername(String username)` | `UsuarioResponseDTO` | Busca pelo username; lança `UsuarioNotFoundException` se não existir. |
+| `atualizarUsuario(UUID id, UsuarioAtualizacaoDTO usuarioAttDTO)` | `UsuarioResponseDTO` | Atualiza somente username e nome, verificando a disponibilidade do novo username. |
+| `autenticar(String username, String passwordHash)` | `Usuario` | Localiza o usuário e compara o valor recebido com o valor armazenado. É um fluxo provisório e inseguro, descrito na nota de segurança da entidade `Usuario`. |
 
-O cadastro exige username, nome, senha/hash e tipo. Se o username já estiver em uso, o service lança `UsernameAlreadyExistsException`. Para usuários do tipo `CLIENTE`, a associação é validada e resolvida para um cliente existente; para `ADMINISTRADOR`, o vínculo com cliente é removido.
+Usuários do tipo `CLIENTE` precisam estar associados a um cliente existente; usuários `ADMINISTRADOR` ficam sem associação. O cadastro lança `UsernameAlreadyExistsException` quando o username já está em uso. A autenticação é a única operação desta classe que retorna a entidade `Usuario`, e não um DTO.
 
 ## 🧰 Tecnologias
 
@@ -304,7 +366,54 @@ O código está organizado por responsabilidade dentro de `com.powermanager.powe
 - `exception/`: exceções específicas do domínio.
 - `src/test/`: testes automatizados, incluindo testes unitários dos services.
 
-A camada de controllers e os endpoints HTTP ainda não foram implementados; por isso, não são listadas rotas REST nesta documentação.
+### Fluxo entre as camadas
+
+```text
+DTO de entrada
+     │
+     ▼
+   Mapper ───────► Entidade
+                      │
+                      ▼
+                   Service ◄──── Repositories
+                      │                │
+                      ▼                ▼
+                Mapper de saída     Banco de dados
+                      │
+                      ▼
+                DTO de resposta
+```
+
+O controller ainda não faz parte do fluxo implementado. Quando for criado, receberá as requisições HTTP, acionará a validação dos DTOs com `@Valid` e delegará as operações aos services.
+
+### Estrutura de pacotes
+
+```text
+src/
+├── main/
+│   ├── java/com/powermanager/powermanager/
+│   │   ├── dto/
+│   │   │   ├── cliente/
+│   │   │   ├── fatura/
+│   │   │   ├── medidor/
+│   │   │   ├── taxa/
+│   │   │   └── usuario/
+│   │   ├── entity/
+│   │   ├── exception/
+│   │   ├── mapper/
+│   │   ├── repository/
+│   │   └── services/
+│   └── resources/
+│       ├── application-dev.yml
+│       └── application-prod.yml
+└── test/
+    └── java/com/powermanager/powermanager/
+        ├── mapper/
+        ├── repository/
+        └── services/
+```
+
+A estrutura resume os pacotes principais; classes auxiliares e enums podem estar em subpacotes próprios. A camada de controllers e os endpoints HTTP ainda não foram implementados; por isso, não são listadas rotas REST nesta documentação.
 
 ## 🚀 Pré-requisitos
 
