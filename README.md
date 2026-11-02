@@ -10,21 +10,23 @@
 
 O **PowerManager API** é um backend desenvolvido em Java e Spring Boot para organizar o gerenciamento de clientes, medidores de energia, tarifas, faturas e usuários em um sistema de faturamento de energia elétrica.
 
-O projeto está em desenvolvimento. Atualmente, possui entidades JPA, repositórios Spring Data JPA, serviços com regras de negócio, exceções específicas e testes unitários para os services. **Os controllers e endpoints HTTP ainda não foram implementados.**
+O projeto está em desenvolvimento. Atualmente, possui entidades JPA, DTOs de entrada e saída, mappers com MapStruct, repositórios Spring Data JPA, services com regras de negócio, exceções específicas e testes automatizados para services, repositories e mappers. **Os controllers e endpoints HTTP ainda não foram implementados.**
 
 ## 🎯 Funcionalidades do domínio
 
 - **Clientes:** cadastro, consulta, listagem e exclusão de consumidores.
-- **Medidores:** cadastro, consulta por identificador ou número e atualização de dados do medidor.
+- **Medidores:** cadastro associado a cliente existente, consulta por identificador ou número, listagem, atualização e exclusão.
 - **Tarifas:** cadastro, consulta por vigência, validação de períodos e manutenção de histórico tarifário.
 - **Faturas:** cálculo, geração, consulta, histórico por medidor e registro de pagamento.
-- **Usuários:** cadastro, consulta, atualização de dados básicos e autenticação provisória.
+- **Usuários:** cadastro, consulta, atualização de dados básicos e autenticação provisória; respostas não expõem o campo de senha.
+- **DTOs e mapeamento:** objetos específicos para cadastro, atualização e resposta, com conversão por MapStruct.
+- **Validação:** DTOs utilizam Bean Validation para validar campos obrigatórios, formatos, limites de tamanho e valores numéricos.
 - **Regras de negócio:** prevenção de duplicidades, validações de dados e exceções específicas para situações inválidas.
 
 ### Regras de negócio implementadas
 
 - Cada medidor está associado a um cliente, e o relacionamento está mapeado como um-para-um.
-- O número do medidor é único.
+- O número do medidor é único e cada cliente pode possuir apenas um medidor associado.
 - Um medidor pode ter várias faturas, mas existe uma restrição para impedir mais de uma fatura para a mesma competência.
 - O consumo e os componentes monetários da tarifa/fatura não podem ser negativos.
 - Uma fatura recém-gerada começa com status `PENDENTE`; o pagamento altera o status para `PAGO`.
@@ -118,7 +120,7 @@ Representa a cobrança de um medidor para determinada competência.
 A fatura armazena os componentes aplicados na emissão: `custoPorUnidadeAplicado`, `aluguelMedidorAplicado`, `taxaServicoAplicada`, `impostoServicoAplicado`, `cessAplicado` e `taxaFixaAplicada`. Isso preserva os valores utilizados no cálculo mesmo que a tarifa seja alterada depois.
 
 **Relacionamentos e restrições**
-- O relacionamento com `Medidor` é `@ManyToOne).
+- O relacionamento com `Medidor` é `@ManyToOne`.
 - A combinação `medidor_id + competencia` é única.
 - O banco restringe o status aos valores `PENDENTE` e `PAGO` e impede consumo, total ou componentes monetários negativos.
 
@@ -132,7 +134,7 @@ Representa uma conta de acesso ao sistema.
 - `nome`: nome de exibição.
 - `passwordHash`: campo destinado ao hash da senha.
 - `tipoUsuario`: enum `TipoUsuario`, com os tipos `ADMINISTRADOR` e `CLIENTE`.
-- `cliente`: associação opcional com `Cliente), carregada de forma lazy.
+- `cliente`: associação opcional com `Cliente`, carregada de forma lazy.
 
 **Regras de associação**
 - O `username` é único.
@@ -141,14 +143,51 @@ Representa uma conta de acesso ao sistema.
 
 > **Nota de segurança:** o método de autenticação atual compara o valor recebido com o campo armazenado e ainda não utiliza `PasswordEncoder` ou Spring Security. A autenticação é provisória e precisa ser aprimorada antes de qualquer uso em produção.
 
+## 📦 DTOs e mapeamento
+
+Os DTOs ficam em `com.powermanager.powermanager.dto` e definem os dados aceitos e devolvidos pelos services, evitando expor diretamente as entidades JPA como contrato de entrada e saída. São implementados como `record`; os DTOs de entrada utilizam anotações do Bean Validation.
+
+| Domínio | DTOs | Responsabilidade |
+| --- | --- | --- |
+| Cliente | `ClienteCadastroDTO`, `ClienteResponseDTO` | Receber dados cadastrais e devolver os dados do cliente com identificador. |
+| Medidor | `MedidorCadastroDTO`, `MedidorAtualizacaoDTO`, `MedidorResponseDTO` | Separar cadastro, atualização e resposta; o cadastro recebe `clienteId`. |
+| Taxa | `TaxaCadastroDTO`, `TaxaAtualizacaoDTO`, `TaxaResponseDTO` | Representar componentes monetários e período de vigência. |
+| Fatura | `FaturaResponseDTO` | Expor cobrança, snapshot tarifário, status e `medidorId`. |
+| Usuário | `UsuarioCadastroDTO`, `UsuarioAtualizacaoDTO`, `UsuarioResponseDTO` | Separar entrada e resposta; o DTO de resposta não contém senha ou hash. |
+
+### Validações declarativas
+
+- Campos textuais obrigatórios utilizam `@NotBlank` e limites de tamanho com `@Size`.
+- E-mail de cliente utiliza `@Email`.
+- Campos obrigatórios e identificadores utilizam `@NotNull`.
+- Dias do medidor utilizam `@Positive`.
+- Componentes monetários da taxa utilizam `@DecimalMin` e `@Digits`, impedindo valores negativos e limitando a precisão a 8 dígitos inteiros e 2 decimais.
+
+Os DTOs definem validações declarativas; os services continuam responsáveis por regras de negócio, como existência de relacionamentos, unicidade e consistência de períodos.
+
+### Mappers
+
+Os mappers ficam em `com.powermanager.powermanager.mapper` e são interfaces anotadas com `@Mapper(componentModel = "spring")`, permitindo injeção nos services.
+
+| Mapper | Responsabilidade |
+| --- | --- |
+| `ClienteMapper` | Cadastro DTO para entidade e entidade para resposta. |
+| `MedidorMapper` | Cadastro, resposta e atualização de entidade existente; converte `cliente.id` em `clienteId`. |
+| `TaxaMapper` | Cadastro, resposta e atualização dos campos tarifários, preservando identificador e fim da vigência. |
+| `FaturaMapper` | Entidade para resposta, convertendo `medidor.id` em `medidorId`. |
+| `UsuarioMapper` | Cadastro, resposta e atualização dos campos permitidos, sem expor senha/hash. |
+
+Os mappers ignoram campos controlados pelo sistema ou protegidos durante a conversão, como identificadores gerados, relacionamentos resolvidos pelo service, senha/hash e tipo de usuário na atualização. A senha é atribuída pelo fluxo de cadastro do service e não é incluída no DTO de resposta.
+
 ## 🗄️ Repositórios
 
-Os repositórios ficam em `com.powermanager.powermanager.repository` e estendem `JpaRepository`. Isso disponibiliza operações padrão como `save`, `findAll`, `findById` e `deleteById), além dos métodos derivados ou consultas customizadas listados abaixo.
+Os repositórios ficam em `com.powermanager.powermanager.repository` e estendem `JpaRepository`. Isso disponibiliza operações padrão como `save`, `findAll`, `findById` e `deleteById`, além dos métodos derivados ou consultas customizadas listados abaixo.
 
 | Repositório | Métodos específicos | Finalidade |
 | --- | --- | --- |
 | `ClienteRepo` | Nenhum método adicional | Utiliza as operações padrão de `JpaRepository<Cliente, UUID>`. |
 | `MedidorRepo` | `findByNumero(String numero)` | Busca um medidor pelo número e retorna `Optional<Medidor>`. |
+| `MedidorRepo` | `existsByClienteId(UUID clienteId)` | Verifica se o cliente já possui medidor associado. |
 | `TaxaRepo` | `buscarTaxaVigenteEm(LocalDateTime data)` | Consulta a taxa cuja vigência inclui a data informada. |
 | `TaxaRepo` | `buscarTaxasComSobreposicao(LocalDateTime inicio, LocalDateTime fim)` | Lista taxas com períodos que se sobrepõem ao intervalo informado. |
 | `FaturaRepo` | `findByMedidor(Medidor medidor)` | Lista faturas associadas a um medidor. |
@@ -185,7 +224,9 @@ Gerencia o cadastro, a consulta e a atualização dos dados de um medidor.
 | `cadastrarMedidor(Medidor medidor)` | Persiste um medidor. |
 | `buscarPorNumero(String numero)` | Busca pelo número único; lança `MedidorNotFoundException` se não encontrar. |
 | `buscarPorId(UUID id)` | Busca pelo UUID; lança `MedidorNotFoundException` se não encontrar. |
-| `atualizarMedidor(UUID id, Medidor dadosAtualizados)` | Localiza o medidor e atualiza número, localização, tipo, código de fase, tipo de fatura e quantidade de dias; salva e retorna a entidade atualizada. |
+| `listarMedidores()` | Lista todos os medidores como DTOs de resposta. |
+| `atualizarMedidor(UUID id, MedidorAtualizacaoDTO dados)` | Atualiza os campos permitidos, verifica conflito de número e retorna o DTO atualizado. |
+| `excluirMedidor(UUID medidorId)` | Verifica a existência do medidor e solicita sua exclusão. |
 
 ### `TaxaService`
 
@@ -193,11 +234,11 @@ Centraliza a validação de valores e períodos tarifários e mantém o históri
 
 | Método | Descrição |
 | --- | --- |
-| `cadastrarNovaTaxa(Taxa taxa)` | Valida os componentes monetários e a vigência. Se o início não for informado, utiliza a data/hora atual; rejeita períodos inválidos ou sobrepostos. |
+| `cadastrarNovaTaxa(TaxaCadastroDTO taxa)` | Valida os componentes monetários e a vigência. Se o início não for informado, utiliza a data/hora atual; rejeita períodos inválidos ou sobrepostos. |
 | `obterTaxaVigente()` | Retorna a taxa vigente no momento da chamada. |
 | `obterTaxaNaData(LocalDateTime data)` | Retorna a taxa vigente na data indicada; valida data nula e lança `TaxaNotFoundException` se não houver taxa vigente. |
 | `listarHistorico()` | Retorna os registros de taxa armazenados. |
-| `atualizarTaxa(Taxa novaTaxa)` | Encerra a vigência da taxa atual e cria um novo registro, preservando o histórico; exige que a nova vigência comece depois do início da taxa atual. |
+| `atualizarTaxa(TaxaAtualizacaoDTO novaTaxa)` | Encerra a vigência da taxa atual e cria um novo registro, preservando o histórico; exige que a nova vigência comece depois do início da taxa atual. |
 
 O service também contém validações internas para garantir que a taxa e os valores monetários não sejam nulos ou negativos, que o fim seja posterior ao início e que os períodos não se sobreponham. As operações de escrita são transacionais.
 
@@ -211,7 +252,7 @@ Coordena o cálculo, a emissão, a consulta e a mudança de status das faturas.
 | `gerarFatura(UUID medidorId, LocalDate competencia, BigDecimal unidadesConsumidas)` | Valida os dados, localiza o medidor, impede duplicidade por medidor/competência, obtém a taxa vigente, calcula o total e salva a fatura como `PENDENTE` com snapshot tarifário. |
 | `listarFaturas()` | Retorna todas as faturas. |
 | `listarPorMedidor(UUID id)` | Retorna as faturas de um medidor. |
-| `buscarPorMedidorEMes(UUID id, LocalDate competencia)` | Busca a fatura de um medidor para a competência informada; lança `FaturaNotFoundException` se não existir. |
+| `buscaPorMedidorECompetencia(UUID id, LocalDate competencia)` | Busca a fatura de um medidor para a competência informada e retorna `FaturaResponseDTO`; lança `FaturaNotFoundException` se não existir. |
 | `listarHistoricoPorMedidor(UUID id)` | Retorna as faturas do medidor por competência decrescente. |
 | `obterDetalhesDaFatura(UUID id)` | Busca uma fatura pelo UUID; lança `FaturaNotFoundException` se não existir. |
 | `pagarFatura(UUID id)` | Altera o status para `PAGO`; lança `FaturaAlreadyPaidException` se a fatura já estiver paga. |
@@ -224,11 +265,11 @@ Gerencia contas de usuário, valida unicidade do username e aplica as regras de 
 
 | Método | Descrição |
 | --- | --- |
-| `cadastrarUsuario(Usuario usuario)` | Valida os campos obrigatórios, verifica a disponibilidade do username e aplica a regra de associação conforme o tipo de usuário. |
+| `cadastrarUsuario(UsuarioCadastroDTO usuario)` | Valida os campos obrigatórios, verifica a disponibilidade do username e aplica a regra de associação conforme o tipo de usuário. |
 | `listarUsuarios()` | Retorna todos os usuários cadastrados. |
 | `buscarPorId(UUID id)` | Busca pelo UUID; lança `UsuarioNotFoundException` se não existir. |
 | `buscaPorUsername(String username)` | Busca pelo username; lança `UsuarioNotFoundException` se não existir. |
-| `atualizarUsuario(UUID id, Usuario usuarioAtualizado)` | Atualiza username e nome, verificando se o novo username já pertence a outro usuário. |
+| `atualizarUsuario(UUID id, UsuarioAtualizacaoDTO dados)` | Atualiza username e nome, verificando se o novo username já pertence a outro usuário. |
 | `autenticar(String username, String passwordHash)` | Procura o usuário e compara o valor recebido com o campo armazenado; retorna erro genérico quando usuário/senha não correspondem. A implementação é provisória, conforme a nota de segurança acima. |
 
 O cadastro exige username, nome, senha/hash e tipo. Se o username já estiver em uso, o service lança `UsernameAlreadyExistsException`. Para usuários do tipo `CLIENTE`, a associação é validada e resolvida para um cliente existente; para `ADMINISTRADOR`, o vínculo com cliente é removido.
@@ -241,13 +282,14 @@ O cadastro exige username, nome, senha/hash e tipo. Se o username já estiver em
 | Spring Boot 4.1.1 | Configuração e execução |
 | Spring Data JPA | Persistência e acesso a dados |
 | Hibernate | Mapeamento objeto-relacional |
-| Bean Validation | Recursos de validação disponíveis no projeto |
+| Bean Validation | Validação declarativa dos campos dos DTOs |
 | Maven Wrapper | Build e execução |
 | H2 | Banco em memória no ambiente de desenvolvimento |
 | MySQL 8.4 | Banco configurado para o profile de produção |
 | Docker Compose | Inicialização local do MySQL |
 | JUnit 5 e Mockito | Testes unitários |
 | JaCoCo 0.8.14 | Relatório de cobertura |
+| MapStruct 1.6.3 | Geração de mapeamentos entre DTOs e entidades |
 | Lombok | Redução de código repetitivo |
 
 ## 🏗️ Arquitetura
@@ -256,7 +298,9 @@ O código está organizado por responsabilidade dentro de `com.powermanager.powe
 
 - `entity/`: entidades JPA e enums do domínio.
 - `repository/`: interfaces de acesso a dados com Spring Data JPA.
-- `services/`: regras de negócio e operações das entidades.
+- `dto/`: records de entrada, atualização e resposta, com validações declarativas.
+- `mapper/`: interfaces MapStruct para conversão entre DTOs e entidades.
+- `services/`: regras de negócio do domínio, recebendo e retornando DTOs.
 - `exception/`: exceções específicas do domínio.
 - `src/test/`: testes automatizados, incluindo testes unitários dos services.
 
@@ -350,21 +394,11 @@ O volume `powermanager-mysql-data` mantém os dados entre reinicializações do 
 
 ## 🧪 Testes e cobertura de código
 
-Os testes unitários dos cinco services foram executados com sucesso, usando JUnit 5 e Mockito.
+Há testes automatizados para os cinco services, repositories e mappers, utilizando JUnit 5, Mockito e AssertJ. Os testes dos services foram adaptados para simular os mappers e validar os fluxos de conversão entre DTOs e entidades.
 
-### Cobertura reportada pelo JaCoCo
+### Relatório JaCoCo
 
-No relatório do pacote `com.powermanager.powermanager.services`, a execução apresentada atingiu:
-
-| Métrica | Resultado |
-| --- | ---: |
-| Instruções cobertas | **100% (775/775)** |
-| Branches cobertos | **100% (68/68)** |
-| Linhas não cobertas | **0 de 172** |
-| Métodos não cobertos | **0 de 48** |
-| Classes não cobertas | **0 de 5** |
-
-Esses números são referentes à camada de services, não à cobertura global de todas as classes do projeto. Consulte o relatório gerado na sua execução para confirmar os resultados atuais.
+O JaCoCo está configurado para gerar o relatório durante a fase `verify`. Como os services e os testes foram refatorados para utilizar DTOs e MapStruct, consulte o relatório da execução atual para obter os percentuais atualizados. Os números de execuções anteriores não devem ser interpretados como cobertura atual ou como cobertura global do projeto.
 
 Execute os testes:
 
@@ -395,9 +429,11 @@ O projeto continua em desenvolvimento.
 - [x] Modelagem das entidades e relacionamentos.
 - [x] Configuração dos profiles de desenvolvimento (H2) e produção (MySQL).
 - [x] Repositórios com Spring Data JPA.
-- [x] Camada de services e regras de negócio iniciais.
+- [x] Camada de services e regras de negócio.
+- [x] DTOs de cadastro, atualização e resposta com Bean Validation.
+- [x] Mappers MapStruct para conversão entre DTOs e entidades.
 - [x] Exceções específicas do domínio.
-- [x] Testes unitários dos services, com 100% de cobertura reportada para o pacote de services.
+- [x] Testes automatizados de services, repositories e mappers.
 
 ### Próximas etapas
 
