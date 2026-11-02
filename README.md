@@ -210,9 +210,9 @@ Gerencia operações de cadastro e consulta de clientes.
 
 | Método | Descrição |
 | --- | --- |
-| `cadastrarCliente(Cliente cliente)` | Persiste um novo cliente. |
-| `listarClientes()` | Retorna todos os clientes cadastrados. |
-| `buscarPorId(UUID id)` | Busca um cliente pelo UUID; lança `ClienteNotFoundException` se não existir. |
+| `cadastrarCliente(ClienteCadastroDTO cliente)` | Converte os dados de entrada, persiste o cliente e retorna `ClienteResponseDTO`. |
+| `listarClientes()` | Retorna todos os clientes como lista de `ClienteResponseDTO`. |
+| `buscarPorId(UUID id)` | Busca um cliente pelo UUID e retorna `ClienteResponseDTO`; lança `ClienteNotFoundException` se não existir. |
 | `excluir(UUID id)` | Verifica a existência do cliente e solicita sua exclusão; lança `ClienteNotFoundException` quando não encontrado. |
 
 ### `MedidorService`
@@ -221,9 +221,9 @@ Gerencia o cadastro, a consulta e a atualização dos dados de um medidor.
 
 | Método | Descrição |
 | --- | --- |
-| `cadastrarMedidor(Medidor medidor)` | Persiste um medidor. |
-| `buscarPorNumero(String numero)` | Busca pelo número único; lança `MedidorNotFoundException` se não encontrar. |
-| `buscarPorId(UUID id)` | Busca pelo UUID; lança `MedidorNotFoundException` se não encontrar. |
+| `cadastrarMedidor(MedidorCadastroDTO medidor)` | Valida número e vínculo, converte o DTO, persiste o medidor e retorna `MedidorResponseDTO`. |
+| `buscarPorNumero(String numero)` | Busca pelo número único e retorna `MedidorResponseDTO`; lança `MedidorNotFoundException` se não encontrar. |
+| `buscarPorId(UUID id)` | Busca pelo UUID e retorna `MedidorResponseDTO`; lança `MedidorNotFoundException` se não encontrar. |
 | `listarMedidores()` | Lista todos os medidores como DTOs de resposta. |
 | `atualizarMedidor(UUID id, MedidorAtualizacaoDTO dados)` | Atualiza os campos permitidos, verifica conflito de número e retorna o DTO atualizado. |
 | `excluirMedidor(UUID medidorId)` | Verifica a existência do medidor e solicita sua exclusão. |
