@@ -1,3 +1,4 @@
+
 package com.powermanager.powermanager.services;
 
 import com.powermanager.powermanager.dto.taxa.TaxaAtualizacaoDTO;
@@ -14,7 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -24,138 +27,139 @@ public class TaxaService {
     private final TaxaMapper taxaMapper;
 
     /**
-     * Cadastra uma nova taxa.
+     * Cadastra a primeira taxa, desde que não exista
+     * outra vigência sobreposta.
      */
     @Transactional
-    public TaxaResponseDTO cadastrarNovaTaxa(TaxaCadastroDTO taxaCadastroDTO){
+    public TaxaResponseDTO cadastrarNovaTaxa(TaxaCadastroDTO taxaCadastroDTO) {
 
-        if (taxaCadastroDTO == null){
-
-            throw new TaxaValidationException("a Taxa não pode ser nula");
-        }
-
-        Taxa taxa = taxaMapper.paraEntidade(taxaCadastroDTO);
-
-        validarTaxa(taxa);
-
-        if (taxa.getInicioVigencia() == null){
-
-            taxa.setInicioVigencia(LocalDateTime.now());
-        }
-
-        validarPeriodo(taxa.getInicioVigencia(), taxa.getFimVigencia());
-        validarSobreposicao(taxa.getInicioVigencia(), taxa.getFimVigencia());
-
-        Taxa taxaSalva = taxaRepo.save(taxa);
-
-        return taxaMapper.paraResponseDTO(taxaSalva);
-    }
-
-    /**
-     * Retorna a taxa vigente neste momento.
-     */
-    @Transactional(readOnly = true)
-    public TaxaResponseDTO obterTaxaVigente(){
-
-        return obterTaxaNaData(LocalDateTime.now());
-
-    }
-
-
-    /**
-     * Retorna a taxa que estava vigente na data informada.
-     */
-    @Transactional(readOnly = true)
-    public TaxaResponseDTO obterTaxaNaData(LocalDateTime data){
-
-        if (data == null){
-
-            throw new TaxaValidationException("A data para consulta não pode ser nula");
-        }
-
-        Taxa taxa = taxaRepo.buscarTaxaVigenteEm(data).orElseThrow(
-                () -> new TaxaNotFoundException("Nenhuma taxa vigente encontrada nessa data"));
-
-        return taxaMapper.paraResponseDTO(taxa);
-    }
-
-    /**
-     * Retorna todo o histórico de taxas.
-     */
-    @Transactional(readOnly = true)
-    public List<TaxaResponseDTO> listarHistorico() {
-
-        return taxaRepo.findAll()
-                .stream()
-                .map(taxaMapper::paraResponseDTO)
-                .toList();
-    }
-
-    /**
-     * Encerra a taxa atual e cria uma nova taxa.
-     *
-     * A taxa antiga permanece armazenada para preservar o histórico.
-     */
-    @Transactional
-    public TaxaResponseDTO atualizarTaxa(TaxaAtualizacaoDTO novaTaxaDTO){
-
-        if (novaTaxaDTO == null){
+        if (taxaCadastroDTO == null) {
 
             throw new TaxaValidationException("A taxa não pode ser nula");
         }
 
         LocalDateTime agora = LocalDateTime.now();
 
-        //precisa da entidade para encerrar a vigência
-        Taxa taxaAtual = buscarTaxaVigenteEntidade(agora);
+        Taxa novaTaxa = taxaMapper.paraEntidade(taxaCadastroDTO);
 
-        LocalDateTime inicioNovaVigencia = novaTaxaDTO.inicioVigencia();
-
-        if (inicioNovaVigencia == null){
-
-            inicioNovaVigencia = agora;
-        }
-
-        if (!inicioNovaVigencia.isAfter(taxaAtual.getInicioVigencia())){
-
-            throw new TaxaValidationException("A nova Taxa deve iniciar apos o inicio da taxa atual");
-        }
-
-        //criamos outra nova entidade para preservar histórico.
-
-        Taxa novaTaxa = new Taxa();
-
-        taxaMapper.atualizarEntidade(novaTaxaDTO, novaTaxa);
-
-        novaTaxa.setInicioVigencia(inicioNovaVigencia);
+        // As datas de vigência são controladas pelo Service.
+        novaTaxa.setInicioVigencia(agora);
         novaTaxa.setFimVigencia(null);
 
         validarTaxa(novaTaxa);
         validarPeriodo(novaTaxa.getInicioVigencia(), novaTaxa.getFimVigencia());
-
-        //encerra taxa anterior sem alterar valores monetários
-        taxaAtual.setFimVigencia(inicioNovaVigencia);
-        taxaRepo.save(taxaAtual);
+        validarSobreposicao(agora, null);
 
         Taxa taxaSalva = taxaRepo.save(novaTaxa);
 
         return taxaMapper.paraResponseDTO(taxaSalva);
     }
 
-    private Taxa buscarTaxaVigenteEntidade(LocalDateTime dateTime){
+    /**
+     * Retorna a taxa vigente no momento da consulta.
+     */
+    @Transactional(readOnly = true)
+    public TaxaResponseDTO obterTaxaVigente() {
 
-        return taxaRepo.buscarTaxaVigenteEm(dateTime)
-                .orElseThrow(
-                        ()-> new TaxaNotFoundException("Nenhuma Taxa vigente encontrada nessa data:" +
-                                dateTime));
+        return obterTaxaNaData(LocalDateTime.now());
     }
 
     /**
-     * Valida os valores monetários da taxa.
+     * Retorna a taxa vigente na data informada.
+     */
+    @Transactional(readOnly = true)
+    public TaxaResponseDTO obterTaxaNaData(LocalDateTime data) {
+
+        if (data == null) {
+
+            throw new TaxaValidationException("A data para consulta não pode ser nula");
+        }
+
+        Taxa taxa = buscarTaxaVigenteEntidade(data);
+
+        return taxaMapper.paraResponseDTO(taxa);
+    }
+
+    /**
+     * Retorna o histórico de taxas em ordem cronológica.
+     */
+    @Transactional(readOnly = true)
+    public List<TaxaResponseDTO> listarHistorico() {
+
+        return taxaRepo.findAll()
+                .stream()
+                .sorted(
+                        Comparator.comparing(Taxa::getInicioVigencia)
+                                .thenComparing(Taxa::getId)
+                )
+                .map(taxaMapper::paraResponseDTO)
+                .toList();
+    }
+
+    /**
+     * Encerra a vigência da taxa atual e cadastra uma nova,
+     * preservando os dados da taxa anterior.
+     */
+    @Transactional
+    public TaxaResponseDTO atualizarTaxa(TaxaAtualizacaoDTO novaTaxaDTO) {
+
+        if (novaTaxaDTO == null) {
+
+            throw new TaxaValidationException("A taxa não pode ser nula");
+        }
+
+        LocalDateTime agora = LocalDateTime.now();
+
+        Taxa taxaAtual = buscarTaxaVigenteEntidade(agora);
+
+        // Impede uma vigência com duração igual a zero.
+        if (!agora.isAfter(taxaAtual.getInicioVigencia())) {
+
+            throw new TaxaValidationException("A taxa atual precisa ter iniciado antes da atualização");
+        }
+
+        // Verifica sobreposições, desconsiderando a taxa atual.
+        validarSobreposicaoNaAtualizacao(agora, taxaAtual.getId());
+
+        // Cria uma nova entidade para preservar o histórico.
+        Taxa novaTaxa = new Taxa();
+
+        taxaMapper.atualizarEntidade(novaTaxaDTO, novaTaxa);
+
+        novaTaxa.setInicioVigencia(agora);
+        novaTaxa.setFimVigencia(null);
+
+        validarTaxa(novaTaxa);
+        validarPeriodo(novaTaxa.getInicioVigencia(), novaTaxa.getFimVigencia());
+
+        // Encerra a vigência da taxa anterior.
+        taxaAtual.setFimVigencia(agora);
+
+        validarPeriodo(taxaAtual.getInicioVigencia(), taxaAtual.getFimVigencia());
+
+        // O dirty checking persiste a alteração da taxa atual.
+        Taxa taxaSalva = taxaRepo.save(novaTaxa);
+
+        return taxaMapper.paraResponseDTO(taxaSalva);
+    }
+
+    /**
+     * Busca a entidade da taxa vigente em determinada data.
+     */
+    private Taxa buscarTaxaVigenteEntidade(LocalDateTime data) {
+
+        return taxaRepo.buscarTaxaVigenteEm(data).orElseThrow(
+                        () -> new TaxaNotFoundException(
+                                "Nenhuma taxa vigente encontrada na data: " + data));
+    }
+
+    /**
+     * Valida todos os valores monetários da taxa.
      */
     private void validarTaxa(Taxa taxa) {
 
         if (taxa == null) {
+
             throw new TaxaValidationException("A taxa não pode ser nula");
         }
 
@@ -168,7 +172,7 @@ public class TaxaService {
     }
 
     /**
-     * Garante que os valores monetários sejam válidos.
+     * Garante que um valor monetário seja informado e não negativo.
      */
     private void validarValor(BigDecimal valor, String campo) {
 
@@ -200,8 +204,7 @@ public class TaxaService {
     }
 
     /**
-     * Garante que a nova taxa não sobreponha
-     * uma vigência já existente.
+     * Impede o cadastro de uma taxa com vigência sobreposta.
      */
     private void validarSobreposicao(LocalDateTime inicio, LocalDateTime fim) {
 
@@ -210,6 +213,23 @@ public class TaxaService {
         if (!taxasSobrepostas.isEmpty()) {
 
             throw new TaxaValidationException("O período informado se sobrepõe a uma taxa já existente");
+        }
+    }
+
+    /**
+     * Verifica sobreposições durante uma atualização,
+     * desconsiderando a taxa que será encerrada.
+     */
+    private void validarSobreposicaoNaAtualizacao(LocalDateTime inicio, UUID idTaxaAtual) {
+
+        List<Taxa> taxasSobrepostas = taxaRepo.buscarTaxasComSobreposicao(inicio, null);
+
+        boolean existeOutraTaxa = taxasSobrepostas.stream()
+                .anyMatch(taxa -> !taxa.getId().equals(idTaxaAtual));
+
+        if (existeOutraTaxa) {
+
+            throw new TaxaValidationException("Existe outra taxa com vigência sobreposta à nova taxa");
         }
     }
 }

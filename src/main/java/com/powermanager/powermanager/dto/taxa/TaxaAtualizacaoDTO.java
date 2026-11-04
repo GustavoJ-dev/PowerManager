@@ -43,7 +43,5 @@ public record TaxaAtualizacaoDTO(
         @DecimalMin(value = "0.00", message = "A taxa fixa não pode ser negativa.")
         @Digits(integer = 8, fraction = 2,
                 message = "A taxa fixa deve ter no máximo 8 dígitos inteiros e 2 decimais.")
-        BigDecimal taxaFixa,
-
-        LocalDateTime inicioVigencia) {
+        BigDecimal taxaFixa) {
 }

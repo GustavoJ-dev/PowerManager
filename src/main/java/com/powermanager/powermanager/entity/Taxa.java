@@ -18,7 +18,9 @@ import java.util.UUID;
         @CheckConstraint(name = "ck_taxa_servico", constraint = "taxa_servico >= 0"),
         @CheckConstraint(name = "ck_taxa_imposto", constraint = "imposto_servico >= 0"),
         @CheckConstraint(name = "ck_taxa_cess", constraint = "cess >= 0"),
-        @CheckConstraint(name = "ck_taxa_fixa", constraint = "taxa_fixa >= 0")
+        @CheckConstraint(name = "ck_taxa_fixa", constraint = "taxa_fixa >= 0"),
+        @CheckConstraint(name = "ck_taxa_vigencia",
+                constraint = "fim_vigencia IS NULL OR fim_vigencia > inicio_vigencia")
 })
 @Getter
 @Setter

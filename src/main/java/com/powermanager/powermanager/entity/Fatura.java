@@ -72,10 +72,10 @@ public class Fatura {
     private BigDecimal valorTotal;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20, columnDefinition = "VARCHAR(20)")
+    @Column(name = "status", nullable = false, length = 20)
     private StatusFatura statusFatura;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "medidor_id", nullable = false)
     private Medidor medidor;
 }

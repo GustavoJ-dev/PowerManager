@@ -65,9 +65,9 @@ class MedidorMapperTest {
         assertEquals(id, dto.id());
         assertEquals("MED-001", dto.numero());
         assertEquals("Sala", dto.localizacao());
-        assertEquals("Digital", dto.tipo());
-        assertEquals("A", dto.codigoFase());
-        assertEquals("Mensal", dto.tipoFatura());
+        assertEquals("Digital", dto.tipoMedidor());
+        assertEquals("A", dto.tipoLigacao());
+        assertEquals("Mensal", dto.classeConsumo());
         assertEquals(30, dto.dias());
         assertEquals(clienteId, dto.clienteId());
     }

@@ -11,11 +11,15 @@ import org.mapstruct.MappingTarget;
 @Mapper(componentModel = "spring")
 public interface TaxaMapper {
 
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "inicioVigencia", ignore = true)
+    @Mapping(target = "fimVigencia", ignore = true)
     Taxa paraEntidade(TaxaCadastroDTO dto);
 
     TaxaResponseDTO paraResponseDTO(Taxa taxa);
 
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "inicioVigencia", ignore = true)
     @Mapping(target = "fimVigencia", ignore = true)
     void atualizarEntidade(TaxaAtualizacaoDTO dto, @MappingTarget Taxa taxa);
 }

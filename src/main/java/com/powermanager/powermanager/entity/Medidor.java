@@ -1,6 +1,9 @@
 package com.powermanager.powermanager.entity;
 
 
+import com.powermanager.powermanager.entity.enums.ClasseConsumo;
+import com.powermanager.powermanager.entity.enums.TipoLigacao;
+import com.powermanager.powermanager.entity.enums.TipoMedidor;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -11,7 +14,9 @@ import org.hibernate.type.SqlTypes;
 import java.util.UUID;
 
 @Entity
-@Table
+@Table(check = {
+        @CheckConstraint(name = "ck_medidor_dias", constraint = "dias > 0")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -29,20 +34,23 @@ public class Medidor {
     @Column(name = "localizacao", nullable = false, length = 30)
     private String localizacao;
 
-    @Column(name = "tipo", nullable = false, length = 30)
-    private String tipo;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_medidor", nullable = false)
+    private TipoMedidor tipoMedidor;
 
-    @Column(name = "codigo_fase", nullable = false,  length = 10)
-    private String codigoFase;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_ligacao", nullable = false,  length = 10)
+    private TipoLigacao tipoLigacao;
 
-    @Column(name = "tipo_fatura", nullable = false, length = 30)
-    private String tipoFatura;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "classe_consumo", nullable = false, length = 30)
+    private ClasseConsumo classeConsumo;
 
     //Quantidade de dias considerada para o período de faturamento do medidor.
     @Column(name = "dias", nullable = false)
     private Integer dias;
 
-    @OneToOne
-    @JoinColumn(name = "cliente_id", nullable = false, unique = true)
+    @ManyToOne
+    @JoinColumn(name = "cliente_id", nullable = false)
     private Cliente cliente;
 }

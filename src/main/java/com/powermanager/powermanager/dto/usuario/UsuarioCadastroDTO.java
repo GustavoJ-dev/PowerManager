@@ -18,9 +18,10 @@ public record UsuarioCadastroDTO(
         String nome,
 
         @NotBlank(message = "A senha é obrigatória.")
+        @Size(min = 8, max = 72, message = "A senha deve possuir entre 8 e 72 caracteres." )
         String senha,
 
-        @NotNull(message = "O tipo de Usuário é obrigatório.")
+        @NotNull(message = "O tipoMedidor de Usuário é obrigatório.")
         TipoUsuario tipoUsuario,
 
         UUID clienteId) {

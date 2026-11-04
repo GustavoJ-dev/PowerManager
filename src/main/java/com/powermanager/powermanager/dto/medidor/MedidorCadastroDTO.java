@@ -1,5 +1,8 @@
 package com.powermanager.powermanager.dto.medidor;
 
+import com.powermanager.powermanager.entity.enums.ClasseConsumo;
+import com.powermanager.powermanager.entity.enums.TipoLigacao;
+import com.powermanager.powermanager.entity.enums.TipoMedidor;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -17,17 +20,15 @@ public record MedidorCadastroDTO (
         @Size(max = 30, message = "A localização deve ter no máximo 30 caracteres.")
         String localizacao,
 
-        @NotBlank(message = "O tipo do medidor é obrigatório.")
-        @Size(max = 30, message = "O tipo deve ter no máximo 30 caracteres.")
-        String tipo,
+        @NotBlank(message = "O tipoMedidor do medidor é obrigatório.")
+        @NotNull(message = "O tipoMedidor do medidor é obrigatório.")
+        TipoMedidor tipoMedidor,
 
-        @NotBlank(message = "O código de fase é obrigatório.")
-        @Size(max = 10, message = "O código de fase deve ter no máximo 10 caracteres.")
-        String codigoFase,
+        @NotNull(message = "O código de fase é obrigatório.")
+        TipoLigacao tipoLigacao,
 
-        @NotBlank(message = "O tipo de fatura é obrigatório.")
-        @Size(max = 30, message = "O tipo de fatura deve ter no máximo 30 caracteres.")
-        String tipoFatura,
+        @NotNull(message = "O tipoMedidor de fatura é obrigatório.")
+        ClasseConsumo classeConsumo,
 
         @NotNull(message = "A quantidade de dias é obrigatória.")
         @Positive(message = "A quantidade de dias deve ser positiva.")

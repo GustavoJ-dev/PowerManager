@@ -1,18 +1,18 @@
 package com.powermanager.powermanager.services;
 
+import com.powermanager.powermanager.dto.fatura.FaturaCadastroDTO;
+import com.powermanager.powermanager.dto.fatura.FaturaCalculoDTO;
 import com.powermanager.powermanager.dto.fatura.FaturaResponseDTO;
-import com.powermanager.powermanager.dto.medidor.MedidorCadastroDTO;
-import com.powermanager.powermanager.dto.medidor.MedidorResponseDTO;
-import com.powermanager.powermanager.dto.taxa.TaxaCadastroDTO;
 import com.powermanager.powermanager.dto.taxa.TaxaResponseDTO;
 import com.powermanager.powermanager.entity.Fatura;
 import com.powermanager.powermanager.entity.Medidor;
-import com.powermanager.powermanager.entity.Taxa;
 import com.powermanager.powermanager.entity.enums.StatusFatura;
-import com.powermanager.powermanager.exception.*;
+import com.powermanager.powermanager.exception.FaturaAlreadyExistsException;
+import com.powermanager.powermanager.exception.FaturaAlreadyPaidException;
+import com.powermanager.powermanager.exception.FaturaNotFoundException;
+import com.powermanager.powermanager.exception.FaturaValidationException;
+import com.powermanager.powermanager.exception.MedidorNotFoundException;
 import com.powermanager.powermanager.mapper.FaturaMapper;
-import com.powermanager.powermanager.mapper.MedidorMapper;
-import com.powermanager.powermanager.mapper.TaxaMapper;
 import com.powermanager.powermanager.repository.FaturaRepo;
 import com.powermanager.powermanager.repository.MedidorRepo;
 import lombok.RequiredArgsConstructor;
@@ -30,92 +30,86 @@ import java.util.UUID;
 public class FaturaService {
 
     private final FaturaRepo faturaRepo;
-    private final MedidorService medidorService;
+    private final MedidorRepo medidorRepo;
     private final TaxaService taxaService;
     private final FaturaMapper faturaMapper;
-    private final TaxaMapper taxaMapper;
-    private final MedidorRepo medidorRepo;
 
-
-    //Calcula uma fatura, utilizando taxa vigente
+    /**
+     * Simula o cálculo de uma fatura utilizando a taxa vigente
+     * no momento da consulta.
+     */
     @Transactional(readOnly = true)
-    public BigDecimal calcularFatura(BigDecimal unidadesConsumidas){
+    public BigDecimal calcularFatura(FaturaCalculoDTO dto) {
 
-        validarUnidades(unidadesConsumidas);
+        if (dto == null) {
 
-        TaxaResponseDTO taxaResponse = taxaService.obterTaxaVigente();
+            throw new FaturaValidationException("Os dados para cálculo da fatura são obrigatórios.");
+        }
 
-        TaxaCadastroDTO taxaCadastroDTO = new TaxaCadastroDTO(
-                taxaResponse.custoPorUnidade(),
-                taxaResponse.aluguelMedidor(),
-                taxaResponse.taxaServico(),
-                taxaResponse.impostoServico(),
-                taxaResponse.cess(),
-                taxaResponse.taxaFixa(),
-                taxaResponse.inicioVigencia(),
-                taxaResponse.fimVigencia());
+        validarUnidades(dto.unidadesConsumidas());
 
-        Taxa taxa = taxaMapper.paraEntidade(taxaCadastroDTO);
+        TaxaResponseDTO taxa = taxaService.obterTaxaVigente();
 
-        return calcularValorTotal(unidadesConsumidas, taxa);
+        return calcularValorTotal(dto.unidadesConsumidas(), taxa);
     }
 
-    //gera nova fatura para medidor
+    /**
+     * Gera uma nova fatura para determinado medidor e competência.
+     *
+     * A taxa utilizada é aquela vigente no primeiro dia
+     * da competência informada.
+     */
     @Transactional
-    public FaturaResponseDTO gerarFatura(UUID medidorId, LocalDate competencia, BigDecimal unidadesConsumidas){
+    public FaturaResponseDTO gerarFatura(FaturaCadastroDTO dto) {
 
-        validarDadosFatura(medidorId, competencia, unidadesConsumidas);
+        if (dto == null) {
 
-        Medidor medidor = medidorRepo.findById(medidorId).orElseThrow(
-                ()-> new MedidorNotFoundException("Medidor não encontrado: " + medidorId));
+            throw new FaturaValidationException("Os dados da fatura são obrigatórios.");
+        }
 
-        verificarFaturaExistente(medidor, competencia);
+        validarDadosFatura(dto.medidorId(), dto.competencia(), dto.unidadesConsumidas());
 
-        TaxaResponseDTO taxaResponse = taxaService.obterTaxaVigente();
+        Medidor medidor = medidorRepo.findById(dto.medidorId()).orElseThrow(
+                () -> new MedidorNotFoundException("Medidor não encontrado: " + dto.medidorId()));
 
-        TaxaCadastroDTO taxaCadastroDTO = new TaxaCadastroDTO(
-                taxaResponse.custoPorUnidade(),
-                taxaResponse.aluguelMedidor(),
-                taxaResponse.taxaServico(),
-                taxaResponse.impostoServico(),
-                taxaResponse.cess(),
-                taxaResponse.taxaFixa(),
-                taxaResponse.inicioVigencia(),
-                taxaResponse.fimVigencia());
+        verificarFaturaExistente(medidor, dto.competencia());
 
-        Taxa taxa = taxaMapper.paraEntidade(taxaCadastroDTO);
+        // Busca a taxa vigente no primeiro dia da competência.
+        TaxaResponseDTO taxa = taxaService.obterTaxaNaData(dto.competencia().atStartOfDay());
 
-        BigDecimal valorTotal = calcularValorTotal(unidadesConsumidas, taxa);
+        BigDecimal valorTotal = calcularValorTotal(dto.unidadesConsumidas(), taxa);
 
         Fatura fatura = new Fatura();
-        fatura.setCompetencia(competencia);
-        fatura.setUnidadesConsumidas(unidadesConsumidas);
+
+        fatura.setCompetencia(dto.competencia());
+        fatura.setUnidadesConsumidas(dto.unidadesConsumidas());
 
         /*
          * Snapshot da taxa utilizada no momento da geração.
-         * Alterações futuras na tabela taxa não modificam
-         * uma fatura já emitida.
+         * Alterações futuras nas taxas não modificam
+         * os valores de faturas já emitidas.
          */
-
-        fatura.setCustoPorUnidadeAplicado(taxa.getCustoPorUnidade());
-        fatura.setAluguelMedidorAplicado(taxa.getAluguelMedidor());
-        fatura.setTaxaServicoAplicada(taxa.getTaxaServico());
-        fatura.setImpostoServicoAplicado(taxa.getImpostoServico());
-        fatura.setCessAplicado(taxa.getCess());
-        fatura.setTaxaFixaAplicada(taxa.getTaxaFixa());
+        fatura.setCustoPorUnidadeAplicado(taxa.custoPorUnidade());
+        fatura.setAluguelMedidorAplicado(taxa.aluguelMedidor());
+        fatura.setTaxaServicoAplicada(taxa.taxaServico());
+        fatura.setImpostoServicoAplicado(taxa.impostoServico());
+        fatura.setCessAplicado(taxa.cess());
+        fatura.setTaxaFixaAplicada(taxa.taxaFixa());
 
         fatura.setValorTotal(valorTotal);
         fatura.setStatusFatura(StatusFatura.PENDENTE);
         fatura.setMedidor(medidor);
 
-        Fatura faturaSalva =faturaRepo.save(fatura);
+        Fatura faturaSalva = faturaRepo.save(fatura);
 
         return faturaMapper.paraResponseDTO(faturaSalva);
     }
 
-    //lista todas as faturas
+    /**
+     * Lista todas as faturas cadastradas.
+     */
     @Transactional(readOnly = true)
-    public List<FaturaResponseDTO> listarFaturas(){
+    public List<FaturaResponseDTO> listarFaturas() {
 
         return faturaRepo.findAll()
                 .stream()
@@ -123,12 +117,13 @@ public class FaturaService {
                 .toList();
     }
 
-    //lista todas faturas de um medidor
+    /**
+     * Lista todas as faturas de determinado medidor.
+     */
     @Transactional(readOnly = true)
-    public List<FaturaResponseDTO> listarPorMedidor(UUID id){
+    public List<FaturaResponseDTO> listarPorMedidor(UUID id) {
 
-        Medidor medidor = medidorRepo.findById(id).orElseThrow(
-                ()-> new MedidorNotFoundException("Medidor não encontrado: " + id));
+        Medidor medidor = buscarMedidor(id);
 
         return faturaRepo.findByMedidor(medidor)
                 .stream()
@@ -136,28 +131,32 @@ public class FaturaService {
                 .toList();
     }
 
-    //busca determinada fatura de um medidor em uma competência especifíca
+    /**
+     * Busca uma fatura de determinado medidor
+     * em uma competência específica.
+     */
     @Transactional(readOnly = true)
-    public FaturaResponseDTO buscaPorMedidorECompetencia(UUID id, LocalDate competencia){
+    public FaturaResponseDTO buscaPorMedidorECompetencia(UUID id, LocalDate competencia) {
 
-        Medidor medidor = medidorRepo.findById(id).orElseThrow(
-                ()-> new MedidorNotFoundException("Medidor não encontrado: " + id));
+        validarCompetencia(competencia);
 
-        Fatura fatura = faturaRepo.findByMedidorAndCompetencia(medidor, competencia)
-                .orElseThrow(() ->
-                        new FaturaNotFoundException("Fatura não encotrada para o medidor: " + id +
-                                " na competência: " + competencia));
+        Medidor medidor = buscarMedidor(id);
+
+        Fatura fatura = faturaRepo.findByMedidorAndCompetencia(medidor, competencia).orElseThrow(
+                () -> new FaturaNotFoundException("Fatura não encontrada para o medidor: "
+                                + id + " na competência: " + competencia));
 
         return faturaMapper.paraResponseDTO(fatura);
-
     }
 
-    //retorna o historica de faturas de um medidor pelo mais recente
+    /**
+     * Retorna o histórico de faturas de um medidor,
+     * ordenado da competência mais recente para a mais antiga.
+     */
     @Transactional(readOnly = true)
-    public List<FaturaResponseDTO> listarHistoricoPorMedidor(UUID id){
+    public List<FaturaResponseDTO> listarHistoricoPorMedidor(UUID id) {
 
-        Medidor medidor = medidorRepo.findById(id).orElseThrow(
-                ()-> new MedidorNotFoundException("Medidor não encontrado: " + id));
+        Medidor medidor = buscarMedidor(id);
 
         return faturaRepo.findByMedidorOrderByCompetenciaDesc(medidor)
                 .stream()
@@ -165,27 +164,28 @@ public class FaturaService {
                 .toList();
     }
 
-    //busca fatura pelo id
+    /**
+     * Busca uma fatura pelo seu identificador.
+     */
     @Transactional(readOnly = true)
-    public FaturaResponseDTO obterDetalhesDaFatura(UUID id){
+    public FaturaResponseDTO obterDetalhesDaFatura(UUID id) {
 
-        Fatura fatura = faturaRepo.findById(id).orElseThrow(
-                () -> new FaturaNotFoundException("Fatura não encontrada: " + id));
+        Fatura fatura = buscarFatura(id);
 
         return faturaMapper.paraResponseDTO(fatura);
     }
 
-    //Marca uma Fatura como paga
+    /**
+     * Marca uma fatura como paga.
+     */
     @Transactional
-    public FaturaResponseDTO pagarFatura(UUID id){
+    public FaturaResponseDTO pagarFatura(UUID id) {
 
-        Fatura fatura = faturaRepo.findById(id)
-                .orElseThrow(
-                        ()-> new FaturaNotFoundException("Fatura não encontrada ID: " + id));
+        Fatura fatura = buscarFatura(id);
 
-        if (fatura.getStatusFatura() == StatusFatura.PAGO){
+        if (fatura.getStatusFatura() == StatusFatura.PAGO) {
 
-            throw new FaturaAlreadyPaidException("Essa Fatura já está paga");
+            throw new FaturaAlreadyPaidException("Essa fatura já está paga.");
         }
 
         fatura.setStatusFatura(StatusFatura.PAGO);
@@ -195,63 +195,118 @@ public class FaturaService {
         return faturaMapper.paraResponseDTO(faturaSalva);
     }
 
-    /*
-     * Fórmula de cálculo da fatura.
+    /**
+     * Calcula o valor total da fatura.
      *
-     * unidades × custo por unidade
+     * Fórmula:
+     *
+     * consumo x custo por unidade
      * + aluguel do medidor
      * + taxa de serviço
      * + imposto de serviço
      * + CESS
      * + taxa fixa
      */
-    private BigDecimal calcularValorTotal(BigDecimal unidadesConsumidas, Taxa taxa){
+    private BigDecimal calcularValorTotal(BigDecimal unidadesConsumidas, TaxaResponseDTO taxa) {
 
-        BigDecimal consumo = unidadesConsumidas.multiply(taxa.getCustoPorUnidade());
+        BigDecimal consumo = unidadesConsumidas.multiply(taxa.custoPorUnidade());
 
         return consumo
-                .add(taxa.getAluguelMedidor())
-                .add(taxa.getTaxaServico())
-                .add(taxa.getImpostoServico())
-                .add(taxa.getCess())
-                .add(taxa.getTaxaFixa())
+                .add(taxa.aluguelMedidor())
+                .add(taxa.taxaServico())
+                .add(taxa.impostoServico())
+                .add(taxa.cess())
+                .add(taxa.taxaFixa())
                 .setScale(2, RoundingMode.HALF_UP);
     }
 
-    private void validarDadosFatura(UUID id, LocalDate competencia, BigDecimal unidadesConsumidas){
+    /**
+     * Valida os dados necessários para gerar uma fatura.
+     */
+    private void validarDadosFatura(UUID medidorId, LocalDate competencia, BigDecimal unidadesConsumidas) {
 
-        if (id == null){
+        if (medidorId == null) {
 
-            throw new FaturaValidationException("O medidor é obrigatório");
+            throw new FaturaValidationException("O medidor é obrigatório.");
         }
 
-        if (competencia == null){
-
-            throw new FaturaValidationException("A competência é obrigatória");
-        }
-
+        validarCompetencia(competencia);
         validarUnidades(unidadesConsumidas);
     }
 
-    private void validarUnidades(BigDecimal unidadesConsumidas){
+    /**
+     * Valida se a competência corresponde ao primeiro dia do mês.
+     */
+    private void validarCompetencia(LocalDate competencia) {
 
-        if (unidadesConsumidas == null){
+        if (competencia == null) {
 
-            throw new FaturaValidationException("As unidades consumidas são obrigatórias");
+            throw new FaturaValidationException("A competência é obrigatória.");
         }
 
-        if (unidadesConsumidas.compareTo(BigDecimal.ZERO) < 0){
+        if (competencia.getDayOfMonth() != 1) {
 
-            throw new FaturaValidationException("As unidades consumidas não podem ser negativas");
+            throw new FaturaValidationException("A competência deve corresponder ao primeiro dia do mês.");
         }
     }
 
-    private void verificarFaturaExistente(Medidor medidor, LocalDate competencia){
+    /**
+     * Valida as unidades consumidas.
+     */
+    private void validarUnidades(BigDecimal unidadesConsumidas) {
 
-        if (faturaRepo.findByMedidorAndCompetencia(medidor, competencia).isPresent()){
+        if (unidadesConsumidas == null) {
 
-            throw new FaturaAlreadyExistsException("Já existe uma fatura para o medidor: " + medidor.getNumero() +
-                    " na competência: " + competencia);
+            throw new FaturaValidationException("As unidades consumidas são obrigatórias.");
         }
+
+        if (unidadesConsumidas.compareTo(BigDecimal.ZERO) < 0) {
+
+            throw new FaturaValidationException("As unidades consumidas não podem ser negativas.");
+        }
+    }
+
+    /**
+     * Verifica se já existe uma fatura para o medidor
+     * na competência informada.
+     */
+    private void verificarFaturaExistente(Medidor medidor, LocalDate competencia) {
+
+        if (faturaRepo.findByMedidorAndCompetencia(medidor, competencia).isPresent()) {
+
+            throw new FaturaAlreadyExistsException(
+                    "Já existe uma fatura para o medidor: "
+                            + medidor.getNumero()
+                            + " na competência: "
+                            + competencia);
+        }
+    }
+
+    /**
+     * Busca um medidor pelo identificador.
+     */
+    private Medidor buscarMedidor(UUID id) {
+
+        if (id == null) {
+
+            throw new FaturaValidationException("O identificador do medidor é obrigatório.");
+        }
+
+        return medidorRepo.findById(id)
+                .orElseThrow(() -> new MedidorNotFoundException("Medidor não encontrado: " + id));
+    }
+
+    /**
+     * Busca uma fatura pelo identificador.
+     */
+    private Fatura buscarFatura(UUID id) {
+
+        if (id == null) {
+
+            throw new FaturaValidationException("O identificador da fatura é obrigatório.");
+        }
+
+        return faturaRepo.findById(id)
+                .orElseThrow(() -> new FaturaNotFoundException("Fatura não encontrada: " + id));
     }
 }

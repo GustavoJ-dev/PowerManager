@@ -12,11 +12,10 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "usuario", uniqueConstraints = {
-                            @UniqueConstraint(name = "uk_usuario_username",
-                                            columnNames = {"username"})},
+                            @UniqueConstraint(name = "uk_usuario_username", columnNames = {"username"})},
                          check = {
                             @CheckConstraint(name = "ck_usuario_tipo",
-                                    constraint = "tipo IN ('ADMINISTRADOR', 'CLIENTE')")})
+                                    constraint = "tipo_usuario IN ('ADMINISTRADOR', 'CLIENTE')")})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -38,7 +37,7 @@ public class Usuario {
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "tipo", nullable = false, length = 20, columnDefinition = "VARCHAR(20)")
+    @Column(name = "tipo_usuario", nullable = false, length = 20)
     private TipoUsuario tipoUsuario;
 
     @ManyToOne(fetch = FetchType.LAZY)

@@ -107,9 +107,9 @@ public class MedidorServiceTest {
 
         destino.setNumero(dto.numero());
         destino.setLocalizacao(dto.localizacao());
-        destino.setTipo(dto.tipo());
+        destino.setTipo(dto.tipoMedidor());
         destino.setCodigoFase(dto.codigoFase());
-        destino.setTipoFatura(dto.tipoFatura());
+        destino.setTipoFatura(dto.classeConsumo());
         destino.setDias(dto.dias());
     }
 
@@ -127,7 +127,6 @@ public class MedidorServiceTest {
 
         when(medidorRepo.findByNumero(dto.numero())).thenReturn(Optional.empty());
         when(clienteRepo.findById(cliente.getId())).thenReturn(Optional.of(cliente));
-        when(medidorRepo.existsByClienteId(cliente.getId())).thenReturn(false);
         when(medidorMapper.paraEntidade(dto)).thenReturn(medidor);
         when(medidorRepo.save(medidor)).thenReturn(medidor);
         when(medidorMapper.paraResponseDTO(medidor)).thenReturn(responseDTO);
@@ -138,7 +137,6 @@ public class MedidorServiceTest {
 
         verify(medidorRepo).findByNumero(dto.numero());
         verify(clienteRepo).findById(cliente.getId());
-        verify(medidorRepo).existsByClienteId(cliente.getId());
         verify(medidorMapper).paraEntidade(dto);
         verify(medidorRepo).save(medidor);
         verify(medidorMapper).paraResponseDTO(medidor);
@@ -185,31 +183,60 @@ public class MedidorServiceTest {
 
         verify(medidorRepo).findByNumero(dto.numero());
         verify(clienteRepo).findById(clienteId);
-        verify(medidorRepo, never()).existsByClienteId(any(UUID.class));
 
         verifyNoInteractions(medidorMapper);
     }
 
     @Test
-    void deveLancarExcecaoQuandoClienteJaPossuirMedidor(){
+    void devePermitirCadastrarVariosMedidoresParaOMesmoCliente() {
 
         Cliente cliente = criarCliente();
 
-        MedidorCadastroDTO dto = criarCadastroDTO(cliente.getId());
+        MedidorCadastroDTO primeiroDTO = criarCadastroDTO(cliente.getId());
 
-        when(medidorRepo.findByNumero(dto.numero())).thenReturn(Optional.empty());
+        Medidor primeiroMedidor = criarMedidor();
+        primeiroMedidor.setCliente(cliente);
+
+        MedidorResponseDTO primeiroResponse = criarResponseDTO(primeiroMedidor);
+
+        when(medidorRepo.findByNumero(primeiroDTO.numero())).thenReturn(Optional.empty());
         when(clienteRepo.findById(cliente.getId())).thenReturn(Optional.of(cliente));
-        when(medidorRepo.existsByClienteId(cliente.getId())).thenReturn(true);
+        when(medidorMapper.paraEntidade(primeiroDTO)).thenReturn(primeiroMedidor);
+        when(medidorRepo.save(primeiroMedidor)).thenReturn(primeiroMedidor);
+        when(medidorMapper.paraResponseDTO(primeiroMedidor)).thenReturn(primeiroResponse);
 
-        assertThrows(MedidorValidationException.class,
-                ()-> medidorService.cadastrarMedidor(dto));
+        MedidorResponseDTO primeiroResultado = medidorService.cadastrarMedidor(primeiroDTO);
 
-        verify(medidorRepo).findByNumero(dto.numero());
-        verify(clienteRepo).findById(cliente.getId());
-        verify(medidorRepo).existsByClienteId(cliente.getId());
+        assertEquals(primeiroResponse, primeiroResultado);
 
-        verify(medidorRepo, never()).save(any(Medidor.class));
-        verifyNoInteractions(medidorMapper);
+        MedidorCadastroDTO segundoDTO = new MedidorCadastroDTO(
+                "MED002",
+                "Garagem",
+                "BIDIRECIONAL",
+                "TRIFASICO",
+                "ENERGIA",
+                30,
+                cliente.getId());
+
+        Medidor segundoMedidor = criarMedidor();
+        segundoMedidor.setId(UUID.randomUUID());
+        segundoMedidor.setNumero("MED002");
+        segundoMedidor.setLocalizacao("Garagem");
+        segundoMedidor.setCliente(cliente);
+
+        MedidorResponseDTO segundoResponse = criarResponseDTO(segundoMedidor);
+
+        when(medidorRepo.findByNumero(segundoDTO.numero())).thenReturn(Optional.empty());
+        when(medidorMapper.paraEntidade(segundoDTO)).thenReturn(segundoMedidor);
+        when(medidorRepo.save(segundoMedidor)).thenReturn(segundoMedidor);
+        when(medidorMapper.paraResponseDTO(segundoMedidor)).thenReturn(segundoResponse);
+        MedidorResponseDTO segundoResultado = medidorService.cadastrarMedidor(segundoDTO);
+
+        assertEquals(segundoResponse, segundoResultado);
+        assertEquals(cliente.getId(), segundoResultado.clienteId());
+
+        verify(medidorRepo, times(2)).save(any(Medidor.class));
+        verify(clienteRepo, times(2)).findById(cliente.getId());
     }
 
     //listar medidores
@@ -332,9 +359,9 @@ public class MedidorServiceTest {
                 id,
                 dto.numero(),
                 dto.localizacao(),
-                dto.tipo(),
+                dto.tipoMedidor(),
                 dto.codigoFase(),
-                dto.tipoFatura(),
+                dto.classeConsumo(),
                 dto.dias(),
                 null);
 

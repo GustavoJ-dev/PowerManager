@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -28,54 +29,40 @@ public class UsuarioService {
     private final ClienteRepo clienteRepo;
     private final UsuarioMapper usuarioMapper;
 
-    //cadastra novo usuario
+    /*
+     * Cadastra um novo usuário.
+     */
     @Transactional
     public UsuarioResponseDTO cadastrarUsuario(UsuarioCadastroDTO dto) {
 
-        if (dto == null){
+        if (dto == null) {
 
             throw new UsuarioValidationException("Os dados do usuário são obrigatórios.");
         }
 
-        verificarUsernameDisponivel(dto.username());
+        String username = normalizarUsername(dto.username());
+
+        verificarUsernameDisponivel(username);
 
         Usuario usuario = usuarioMapper.paraEntidade(dto);
 
+        usuario.setUsername(username);
+        usuario.setPasswordHash(dto.senha());
+
         validarUsuario(usuario);
 
-        //Cliente precisa estar associado a um cliente existente
-        if (dto.tipoUsuario() == TipoUsuario.CLIENTE){
-
-            if (dto.clienteId() == null){
-
-                throw new UsuarioValidationException("Usuário CLIENTE deve estar associado a um cliente");
-            }
-
-            Cliente cliente = clienteRepo.findById(dto.clienteId())
-                    .orElseThrow(
-                            ()-> new ClienteNotFoundException("Cliente não encontrado."));
-
-            usuario.setCliente(cliente);
-        }
-
-        //administrador não possui cliente associado
-        if (dto.tipoUsuario() == TipoUsuario.ADMINISTRADOR){
-
-            usuario.setCliente(null);
-        }
-
-        //manter até a etapa security
-        usuario.setPasswordHash(dto.senha());
+        associarCliente(usuario, dto.tipoUsuario(), dto.clienteId());
 
         Usuario usuarioSalvo = usuarioRepo.save(usuario);
 
         return usuarioMapper.paraResponseDTO(usuarioSalvo);
-
     }
 
-    //lista todos os usuarios
+    /*
+     * Lista todos os usuários.
+     */
     @Transactional(readOnly = true)
-    public List<UsuarioResponseDTO> listarUsuarios(){
+    public List<UsuarioResponseDTO> listarUsuarios() {
 
         return usuarioRepo.findAll()
                 .stream()
@@ -83,77 +70,101 @@ public class UsuarioService {
                 .toList();
     }
 
-    //buscar pelo id
+    /*
+     * Busca um usuário pelo ID.
+     */
     @Transactional(readOnly = true)
-    public UsuarioResponseDTO buscarPorId(UUID id){
+    public UsuarioResponseDTO buscarPorId(UUID id) {
 
-        Usuario usuario = usuarioRepo.findById(id).orElseThrow(() ->
-                new UsuarioNotFoundException("Nenhum Usuário com esse ID:" + id));
+        if (id == null) {
+
+            throw new UsuarioValidationException("O ID do usuário é obrigatório.");
+        }
+
+        Usuario usuario = usuarioRepo.findById(id).orElseThrow(
+                () -> new UsuarioNotFoundException("Nenhum usuário encontrado com esse ID: " + id));
 
         return usuarioMapper.paraResponseDTO(usuario);
     }
 
-    //busca um usuario pelo username
+    /*
+     * Busca um usuário pelo username.
+     */
     @Transactional(readOnly = true)
-    public UsuarioResponseDTO buscaPorUsername(String username){
+    public UsuarioResponseDTO buscaPorUsername(String username) {
 
-        Usuario usuario =  usuarioRepo.findByUsername(username).orElseThrow(() ->
-                new UsuarioNotFoundException("Usuário: " + username + " não encontrado."));
+        String usernameNormalizado = normalizarUsername(username);
+
+        Usuario usuario = usuarioRepo.findByUsername(usernameNormalizado).orElseThrow(
+                () -> new UsuarioNotFoundException("Usuário: " + usernameNormalizado +
+                        " não encontrado."));
 
         return usuarioMapper.paraResponseDTO(usuario);
     }
 
-    // Atualiza os campos permitidos do usuário
+    /*
+     * Atualiza os campos permitidos do usuário.
+     */
     @Transactional
     public UsuarioResponseDTO atualizarUsuario(UUID id, UsuarioAtualizacaoDTO usuarioAttDTO) {
+
+        if (id == null) {
+
+            throw new UsuarioValidationException("O ID do usuário é obrigatório.");
+        }
 
         if (usuarioAttDTO == null) {
 
             throw new UsuarioValidationException("Os dados do usuário para atualização não podem ser nulos.");
         }
 
-        Usuario usuario = usuarioRepo.findById(id)
-                .orElseThrow(
-                        ()-> new UsuarioNotFoundException(
-                                "Nenhum Usuário encontrado com esse ID: " + id));
+        Usuario usuario = usuarioRepo.findById(id).orElseThrow(
+                        () -> new UsuarioNotFoundException("Nenhum usuário encontrado com esse ID: "
+                                + id));
 
-
-        if (usuarioAttDTO.username() == null || usuarioAttDTO.username().isBlank()) {
-
-            throw new UsuarioValidationException("O username é obrigatório");
-        }
+        String usernameNormalizado = normalizarUsername(usuarioAttDTO.username());
 
         if (usuarioAttDTO.nome() == null || usuarioAttDTO.nome().isBlank()) {
 
             throw new UsuarioValidationException("O nome é obrigatório.");
         }
 
-        if (!usuario.getUsername().equals(usuarioAttDTO.username())) {
+        if (!usuario.getUsername().equals(usernameNormalizado)) {
 
-            verificarUsernameDisponivel(usuarioAttDTO.username());
+            verificarUsernameDisponivel(usernameNormalizado);
         }
 
         usuarioMapper.atualizarEntidade(usuarioAttDTO, usuario);
 
+        // Garante que o username seja armazenado normalizado.
+        usuario.setUsername(usernameNormalizado);
+
         Usuario usuarioSalvo = usuarioRepo.save(usuario);
 
         return usuarioMapper.paraResponseDTO(usuarioSalvo);
-
     }
 
     /*
      * Autentica um usuário.
      *
-     * A verificação real da senha será feita posteriormente
-     * com PasswordEncoder/Spring Security.
+     * Implementação temporária.
+     * A validação segura será realizada posteriormente
+     * com PasswordEncoder e Spring Security.
      */
     @Transactional(readOnly = true)
     public Usuario autenticar(String username, String passwordHash) {
 
-        Usuario usuario = usuarioRepo.findByUsername(username).orElseThrow(() ->
-                        new UsuarioValidationException("Usuário ou senha inválidos."));
+        String usernameNormalizado = normalizarUsername(username);
 
-        if (!usuario.getPasswordHash().equals(passwordHash)){
+        if (passwordHash == null || passwordHash.isBlank()) {
+
+            throw new UsuarioValidationException("Usuário ou senha inválidos.");
+        }
+
+        Usuario usuario = usuarioRepo.findByUsername(usernameNormalizado).orElseThrow(
+                () -> new UsuarioValidationException("Usuário ou senha inválidos."));
+
+        if (!usuario.getPasswordHash().equals(passwordHash)) {
 
             throw new UsuarioValidationException("Usuário ou senha inválidos.");
         }
@@ -161,7 +172,39 @@ public class UsuarioService {
         return usuario;
     }
 
+    /*
+     * Associa o usuário ao cliente correspondente.
+     */
+    private void associarCliente(Usuario usuario, TipoUsuario tipoUsuario, UUID clienteId) {
 
+        if (tipoUsuario == TipoUsuario.CLIENTE) {
+
+            if (clienteId == null) {
+
+                throw new UsuarioValidationException("Usuário CLIENTE deve estar associado a um cliente.");
+            }
+
+            Cliente cliente = clienteRepo.findById(clienteId).orElseThrow(
+                    () -> new ClienteNotFoundException("Cliente não encontrado."));
+
+            usuario.setCliente(cliente);
+            return;
+        }
+
+        if (tipoUsuario == TipoUsuario.ADMINISTRADOR) {
+
+            if (clienteId != null) {
+
+                throw new UsuarioValidationException("Usuário ADMINISTRADOR não pode possuir cliente associado.");
+            }
+
+            usuario.setCliente(null);
+        }
+    }
+
+    /*
+     * Valida os dados básicos do usuário.
+     */
     private void validarUsuario(Usuario usuario) {
 
         if (usuario == null) {
@@ -174,9 +217,19 @@ public class UsuarioService {
             throw new UsuarioValidationException("O username é obrigatório.");
         }
 
+        if (usuario.getUsername().length() > 100) {
+
+            throw new UsuarioValidationException("O username deve ter no máximo 100 caracteres.");
+        }
+
         if (usuario.getNome() == null || usuario.getNome().isBlank()) {
 
             throw new UsuarioValidationException("O nome é obrigatório.");
+        }
+
+        if (usuario.getNome().length() > 100) {
+
+            throw new UsuarioValidationException("O nome deve ter no máximo 100 caracteres.");
         }
 
         if (usuario.getPasswordHash() == null || usuario.getPasswordHash().isBlank()) {
@@ -186,11 +239,35 @@ public class UsuarioService {
 
         if (usuario.getTipoUsuario() == null) {
 
-            throw new UsuarioValidationException("O tipo do usuário é obrigatório.");
+            throw new UsuarioValidationException("O tipoMedidor do usuário é obrigatório.");
         }
     }
 
-    private void verificarUsernameDisponivel(String username){
+    /*
+     * Normaliza o username:
+     * remove espaços nas extremidades e converte para minúsculas.
+     */
+    private String normalizarUsername(String username) {
+
+        if (username == null || username.isBlank()) {
+
+            throw new UsuarioValidationException("O username é obrigatório.");
+        }
+
+        String usernameNormalizado = username.trim().toLowerCase(Locale.ROOT);
+
+        if (usernameNormalizado.length() > 100) {
+
+            throw new UsuarioValidationException("O username deve ter no máximo 100 caracteres.");
+        }
+
+        return usernameNormalizado;
+    }
+
+    /*
+     * Verifica se o username já está sendo utilizado.
+     */
+    private void verificarUsernameDisponivel(String username) {
 
         if (usuarioRepo.findByUsername(username).isPresent()) {
 
