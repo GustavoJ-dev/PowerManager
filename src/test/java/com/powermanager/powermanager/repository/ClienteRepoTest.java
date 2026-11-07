@@ -1,6 +1,12 @@
 package com.powermanager.powermanager.repository;
 
+import com.mysql.cj.xdevapi.Client;
 import com.powermanager.powermanager.entity.Cliente;
+import com.powermanager.powermanager.entity.Medidor;
+import com.powermanager.powermanager.entity.enums.ClasseConsumo;
+import com.powermanager.powermanager.entity.enums.TipoLigacao;
+import com.powermanager.powermanager.entity.enums.TipoMedidor;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,13 +16,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.*;
 
 @DataJpaTest
 public class ClienteRepoTest {
 
     @Autowired
     private ClienteRepo clienteRepo;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private Cliente criarCliente(){
 
@@ -31,6 +40,21 @@ public class ClienteRepoTest {
         return cliente;
     }
 
+    private Medidor criarMedidor(Cliente cliente, String numero){
+
+        Medidor medidor = new Medidor();
+
+        medidor.setNumero(numero);
+        medidor.setCliente(cliente);
+        medidor.setLocalizacao("Residência");
+        medidor.setTipoMedidor(TipoMedidor.ELETRONICO);
+        medidor.setTipoLigacao(TipoLigacao.MONOFASICO);
+        medidor.setClasseConsumo(ClasseConsumo.RESIDENCIAL);
+        medidor.setDias(30);
+
+        return medidor;
+    }
+
     @Test
     @DisplayName("Deve persistir um cliente e gerar seu UUID")
     void devePersistirCliente(){
@@ -40,7 +64,21 @@ public class ClienteRepoTest {
         Cliente salvo = clienteRepo.saveAndFlush(cliente);
 
         assertThat(salvo.getId()).isNotNull();
-        assertThat(clienteRepo.findById(salvo.getId())).isPresent();
+
+        entityManager.clear();
+
+        Optional<Cliente> resultado = clienteRepo.findById(salvo.getId());
+
+        assertThat(resultado).isPresent();
+
+        Cliente encontrado = resultado.orElseThrow();
+
+        assertThat(encontrado.getNome()).isEqualTo("João da Silva");
+        assertThat(encontrado.getEndereco()).isEqualTo("Rua das Flores, 123");
+        assertThat(encontrado.getCidade()).isEqualTo("Salvador");
+        assertThat(encontrado.getEstado()).isEqualTo("Bahia");
+        assertThat(encontrado.getEmail()).isEqualTo("joao@email.com");
+        assertThat(encontrado.getTelefone()).isEqualTo("71999999999");
     }
 
     @Test
@@ -48,6 +86,8 @@ public class ClienteRepoTest {
     void deveBuscarClientePorId(){
 
         Cliente salvo = clienteRepo.saveAndFlush(criarCliente());
+
+        entityManager.clear();
 
         Optional<Cliente> resultado = clienteRepo.findById(salvo.getId());
 
@@ -70,14 +110,15 @@ public class ClienteRepoTest {
     @DisplayName("Deve Listar Clientes persistidos")
     void deveListarClientesPersistidos(){
 
-        clienteRepo.saveAndFlush(criarCliente());
-
+        Cliente primeiro = criarCliente();
         Cliente segundo = criarCliente();
 
         segundo.setEmail("maria@email.com");
         segundo.setNome("Maria Oliveira");
 
-        clienteRepo.saveAndFlush(segundo);
+        clienteRepo.saveAllAndFlush(List.of(primeiro, segundo));
+
+        entityManager.clear();
 
         List<Cliente> clientes = clienteRepo.findAll();
 
@@ -85,6 +126,7 @@ public class ClienteRepoTest {
                 .hasSize(2)
                 .extracting(Cliente::getNome)
                 .containsExactly("João da Silva", "Maria Oliveira");
+
     }
 
     @Test
@@ -101,9 +143,16 @@ public class ClienteRepoTest {
     @DisplayName("Deve contar Clientes persistidos")
     void deveContarClientes(){
 
-        clienteRepo.saveAndFlush(criarCliente());
+       Cliente primeiro = criarCliente();
 
-        assertThat(clienteRepo.count()).isEqualTo(1);
+       Cliente segundo = criarCliente();
+       segundo.setEmail("maria@email.com");
+
+       clienteRepo.saveAllAndFlush(List.of(primeiro, segundo));
+
+       assertThat(clienteRepo.count()).isEqualTo(2);
+
+
     }
 
     @Test
@@ -119,5 +168,28 @@ public class ClienteRepoTest {
 
         assertThat(clienteRepo.findById(id)).isEmpty();
         assertThat(clienteRepo.existsById(id)).isFalse();
+    }
+
+    @Test
+    @DisplayName("Deve permitir que um cliente possua múltiplos medidores")
+    void devePermitirQueUmClienteTenhaMultiplosMedidores(){
+
+        Cliente cliente = clienteRepo.saveAndFlush(criarCliente());
+
+        Medidor primeiro = criarMedidor(cliente, "MED-001");
+        Medidor segundo = criarMedidor(cliente, "MED-002");
+
+        entityManager.persist(primeiro);
+        entityManager.persist(segundo);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        Cliente encontrado = clienteRepo.findById(cliente.getId()).orElseThrow();
+
+        assertThat(encontrado.getMedidores())
+                .hasSize(2)
+                .extracting(Medidor::getNumero)
+                .containsExactly("MED-001", "MED-002");
     }
 }

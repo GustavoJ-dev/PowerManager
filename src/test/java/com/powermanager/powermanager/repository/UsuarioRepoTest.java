@@ -1,8 +1,14 @@
 package com.powermanager.powermanager.repository;
 
+import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.entity.Usuario;
 import com.powermanager.powermanager.entity.enums.TipoUsuario;
+
+import jakarta.persistence.EntityManager;
+
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,7 +26,13 @@ class UsuarioRepoTest {
     @Autowired
     private UsuarioRepo usuarioRepo;
 
-    private Usuario criarUsuario(String username){
+    @Autowired
+    private ClienteRepo clienteRepo;
+
+    @Autowired
+    private EntityManager entityManager;
+
+    private Usuario criarUsuario(String username) {
 
         Usuario usuario = new Usuario();
 
@@ -32,41 +44,83 @@ class UsuarioRepoTest {
         return usuario;
     }
 
-    @Test
-    void devePersistirUsuario(){
+    private Cliente criarCliente() {
 
-        Usuario usuario = criarUsuario("usuario.teste");
+        Cliente cliente = new Cliente();
 
-        Usuario salvo = usuarioRepo.saveAndFlush(usuario);
+        cliente.setNome("João da Silva");
+        cliente.setEndereco("Rua das Flores, 123");
+        cliente.setCidade("Salvador");
+        cliente.setEstado("Bahia");
+        cliente.setEmail("joao@email.com");
+        cliente.setTelefone("71999999999");
 
-        assertThat(salvo.getId()).isNotNull();
-        assertThat(usuarioRepo.findById(salvo.getId())).isPresent();
+        return cliente;
     }
 
     @Test
-    void deveBuscarUsuarioPorId(){
+    @DisplayName("Deve persistir um usuário corretamente")
+    void devePersistirUsuario() {
+
+        Usuario salvo = usuarioRepo.saveAndFlush(criarUsuario("usuario.teste"));
+
+        assertThat(salvo.getId()).isNotNull();
+
+        entityManager.clear();
+
+        Usuario encontrado = usuarioRepo.findById(salvo.getId()).orElseThrow();
+
+        assertThat(encontrado.getUsername()).isEqualTo("usuario.teste");
+        assertThat(encontrado.getNome()).isEqualTo("Usuário de Teste");
+        assertThat(encontrado.getPasswordHash()).isEqualTo("hash-senha-teste");
+        assertThat(encontrado.getTipoUsuario()).isEqualTo(TipoUsuario.CLIENTE);
+        assertThat(encontrado.getCliente()).isNull();
+    }
+
+    @Test
+    @DisplayName("Deve buscar um usuário pelo ID")
+    void deveBuscarUsuarioPorId() {
 
         Usuario salvo = usuarioRepo.saveAndFlush(criarUsuario("usuario.busca"));
+
+        entityManager.clear();
 
         Optional<Usuario> resultado = usuarioRepo.findById(salvo.getId());
 
         assertThat(resultado).isPresent();
-        assertThat(resultado.get().getUsername()).isEqualTo("usuario.busca");
+        assertThat(resultado.orElseThrow().getUsername()).isEqualTo("usuario.busca");
     }
 
     @Test
-    void deveListarUsuarios(){
+    @DisplayName("Não deve encontrar usuário com ID inexistente")
+    void naoDeveEncontrarUsuarioPorIdInexistente() {
 
-        usuarioRepo.saveAndFlush(criarUsuario("usuario.um"));
-        usuarioRepo.saveAndFlush(criarUsuario("usuario.dois"));
+        Optional<Usuario> resultado = usuarioRepo.findById(UUID.randomUUID());
+
+        assertThat(resultado).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Deve listar todos os usuários")
+    void deveListarUsuarios() {
+
+        usuarioRepo.saveAllAndFlush(List.of(
+                criarUsuario("usuario.um"),
+                criarUsuario("usuario.dois")));
+
+        entityManager.clear();
 
         List<Usuario> usuarios = usuarioRepo.findAll();
 
-        assertThat(usuarios).hasSize(2);
+        assertThat(usuarios)
+                .hasSize(2)
+                .extracting(Usuario::getUsername)
+                .containsExactlyInAnyOrder("usuario.um", "usuario.dois");
     }
 
     @Test
-    void deveExcluirUsuario(){
+    @DisplayName("Deve excluir um usuário pelo ID")
+    void deveExcluirUsuario() {
 
         Usuario salvo = usuarioRepo.saveAndFlush(criarUsuario("usuario.excluir"));
 
@@ -76,21 +130,26 @@ class UsuarioRepoTest {
         usuarioRepo.flush();
 
         assertThat(usuarioRepo.findById(id)).isEmpty();
+        assertThat(usuarioRepo.existsById(id)).isFalse();
     }
 
     @Test
-    void deveBuscarUsuarioPorUsername(){
+    @DisplayName("Deve buscar um usuário pelo username")
+    void deveBuscarUsuarioPorUsername() {
 
         Usuario salvo = usuarioRepo.saveAndFlush(criarUsuario("usuario.encontrar"));
+
+        entityManager.clear();
 
         Optional<Usuario> resultado = usuarioRepo.findByUsername("usuario.encontrar");
 
         assertThat(resultado).isPresent();
-        assertThat(resultado.get().getId()).isEqualTo(salvo.getId());
+        assertThat(resultado.orElseThrow().getId()).isEqualTo(salvo.getId());
     }
 
     @Test
-    void deveRetornarVazioQuandoUsernameNaoExistir(){
+    @DisplayName("Não deve encontrar usuário com username inexistente")
+    void naoDeveEncontrarUsuarioPorUsernameInexistente() {
 
         Optional<Usuario> resultado = usuarioRepo.findByUsername("usuario.inexistente");
 
@@ -98,7 +157,8 @@ class UsuarioRepoTest {
     }
 
     @Test
-    void naoDevePermitirUsernameDuplicado(){
+    @DisplayName("Não deve permitir usernames duplicados")
+    void naoDevePermitirUsernameDuplicado() {
 
         usuarioRepo.saveAndFlush(criarUsuario("usuario.duplicado"));
 
@@ -106,5 +166,23 @@ class UsuarioRepoTest {
                 usuarioRepo.saveAndFlush(criarUsuario("usuario.duplicado")))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
-}
 
+    @Test
+    @DisplayName("Deve persistir o relacionamento entre usuário e cliente")
+    void devePersistirRelacionamentoComCliente() {
+
+        Cliente cliente = clienteRepo.saveAndFlush(criarCliente());
+
+        Usuario usuario = criarUsuario("usuario.cliente");
+        usuario.setCliente(cliente);
+
+        Usuario salvo = usuarioRepo.saveAndFlush(usuario);
+
+        entityManager.clear();
+
+        Usuario encontrado = usuarioRepo.findById(salvo.getId()).orElseThrow();
+
+        assertThat(encontrado.getCliente()).isNotNull();
+        assertThat(encontrado.getCliente().getId()).isEqualTo(cliente.getId());
+    }
+}
