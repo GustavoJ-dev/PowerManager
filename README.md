@@ -417,7 +417,7 @@ O projeto está em uma refatoração estrutural do domínio. A lista abaixo sepa
 
 ## 📄 Documentação
 
-- [Especificação consolidada de regras de negócio e arquitetura](ESPECIFICACAO_CONSOLIDADA.md) — documento de referência para as decisões do domínio, relacionamentos, restrições, pendências e roteiro da refatoração.
+- [Especificação consolidada de regras de negócio e arquitetura](docs/PowerManager-Especificacao-Consolidada.pdf) — documento de referência para as decisões do domínio, relacionamentos, restrições, pendências e roteiro da refatoração.
 
 ## 📜 Licença e autor
 
