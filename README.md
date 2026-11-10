@@ -1,79 +1,177 @@
 # ⚡ PowerManager API
 
-API backend para gerenciamento de unidades consumidoras, medidores, leituras, tarifas e faturamento de energia elétrica no Brasil.
+> API REST para gerenciamento do ciclo de medição e faturamento de energia elétrica.
 
-> **Estado do projeto:** em refatoração de domínio. A modelagem das entidades e dos enums foi remodelada para refletir as regras consolidadas. As camadas de aplicação ainda precisam ser alinhadas a essa nova modelagem.
+[![Java](https://img.shields.io/badge/Java-21-orange)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## Índice
+> **Status:** projeto em refatoração de domínio. As regras de negócio e a nova modelagem foram consolidadas; as camadas de aplicação estão sendo adequadas gradualmente a esse modelo. As funcionalidades descritas como planejadas ou pendentes não devem ser interpretadas como endpoints já disponíveis.
 
-- [Sobre o projeto](#sobre-o-projeto)
-- [Escopo funcional](#escopo-funcional)
-- [Modelo de domínio](#modelo-de-domínio)
-- [Regras centrais de faturamento](#regras-centrais-de-faturamento)
-- [Arquitetura](#arquitetura)
-- [Tecnologias](#tecnologias)
-- [Estado da implementação](#estado-da-implementação)
-- [Próximas etapas](#próximas-etapas)
-- [Documentação](#documentação)
+## 📚 Navegação
 
-## Sobre o projeto
+- [Sobre o projeto](#-sobre-o-projeto)
+- [Funcionalidades e regras de negócio](#-funcionalidades-e-regras-de-negócio)
+- [Fluxo de faturamento](#-fluxo-de-faturamento)
+- [Modelo de domínio](#-modelo-de-domínio)
+- [DTOs e mapeamento](#-dtos-e-mapeamento)
+- [Repositórios](#-repositórios)
+- [Services e regras de aplicação](#-services-e-regras-de-aplicação)
+- [Tecnologias e arquitetura](#-tecnologias-e-arquitetura)
+- [Execução](#-execução)
+- [Testes e cobertura](#-testes-e-cobertura)
+- [Estado atual e roadmap](#-estado-atual-e-roadmap)
+- [Documentação](#-documentação)
+- [Licença e autor](#-licença-e-autor)
 
-O PowerManager é uma API destinada a representar o ciclo de gerenciamento e faturamento de energia elétrica, inicialmente voltado aos consumidores do **Grupo B no Brasil**.
+---
 
-O sistema não deve reduzir o faturamento a uma multiplicação por um preço único. A composição da cobrança considera, de forma separada, os componentes tarifários TE e TUSD, bandeiras tarifárias, tributos aplicáveis e demais componentes que venham a ser definidos com regras próprias.
+## 📌 Sobre o projeto
 
-A arquitetura deve preservar os valores históricos utilizados em cada fatura, mesmo quando tarifas, bandeiras ou regras tributárias forem alteradas posteriormente.
+O **PowerManager API** é um backend desenvolvido em Java e Spring Boot para representar o gerenciamento de clientes, unidades consumidoras, medidores, leituras, tarifas e faturas de energia elétrica no Brasil.
 
-## Escopo funcional
+O escopo inicial considera consumidores do **Grupo B**. A proposta é modelar o faturamento de maneira mais próxima da estrutura real do setor elétrico, sem resumir a cobrança a um único preço por kWh. A composição considera separadamente TE, TUSD, bandeiras tarifárias e tributos aplicáveis.
 
-O domínio contempla:
+Um princípio central do projeto é a **preservação histórica**: alterações futuras em tarifas, bandeiras ou regras tributárias não podem modificar os parâmetros utilizados em faturas já emitidas.
 
-- cadastro de clientes pessoas físicas ou jurídicas;
-- cadastro de uma ou mais unidades consumidoras por cliente;
-- gerenciamento e histórico de medidores vinculados às unidades;
-- registro de leituras reais e estimadas;
-- administração de tarifas TE e TUSD por distribuidora, subgrupo, classe, modalidade e vigência;
-- cadastro dos valores oficiais das bandeiras e dos períodos em que foram acionadas;
-- configuração de regras tributárias federais, estaduais e municipais;
-- geração, consulta e pagamento de faturas;
-- gerenciamento de usuários com perfis `ADMINISTRADOR` e `CLIENTE`;
-- preservação de histórico e rastreabilidade das alterações relevantes.
+## 🎯 Funcionalidades e regras de negócio
 
-A integração automática com fontes oficiais, como dados tarifários e de bandeiras divulgados por órgãos competentes, é uma evolução futura. Na primeira etapa, os dados serão cadastrados manualmente por usuários administrativos.
+O domínio contempla as seguintes capacidades:
 
-## Modelo de domínio
+- **Clientes:** cadastro de pessoas físicas ou jurídicas.
+- **Unidades consumidoras:** cadastro de várias instalações por cliente, cada uma com endereço e características tarifárias próprias.
+- **Medidores:** associação à unidade consumidora, com instalação, retirada e histórico de substituições.
+- **Leituras:** registro de leituras reais e estimadas, com data/hora e valor acumulado.
+- **Tarifas:** administração de TE e TUSD por distribuidora, subgrupo, classe, modalidade e período de vigência.
+- **Bandeiras tarifárias:** cadastro dos valores adicionais e dos acionamentos oficiais por período.
+- **Tributos:** configuração separada de regras federais, estaduais e municipais.
+- **Faturas:** geração por unidade consumidora, consulta de histórico e registro manual de pagamento.
+- **Usuários:** contas com perfis `ADMINISTRADOR` e `CLIENTE`, respeitando a associação com o cliente.
+- **Rastreabilidade:** preservação dos parâmetros utilizados em cada faturamento.
+
+Na primeira etapa, tarifas, bandeiras e regras tributárias serão cadastradas manualmente por usuários administrativos. A integração automática com fontes oficiais é uma evolução futura.
+
+### Regras gerais consolidadas
+
+- Um cliente pode possuir várias unidades consumidoras.
+- Uma unidade consumidora representa a instalação elétrica e concentra endereço, distribuidora e enquadramento tarifário.
+- Uma unidade pode possuir vários medidores ao longo do tempo, preservando o histórico; a regra operacional prevê normalmente apenas um medidor ativo por unidade.
+- Leituras pertencem a medidores e registram valores acumulados.
+- O consumo de um intervalo é obtido pela diferença entre leituras válidas, respeitando situações especiais como troca, reinicialização ou rollover do medidor.
+- Tarifas não podem ter períodos de vigência sobrepostos para a mesma combinação de distribuidora, subgrupo, classe e modalidade.
+- Bandeira tarifária cadastrada e acionamento oficial são conceitos distintos.
+- Tributos não são tratados como uma taxa universal: possuem abrangência, localização, parâmetros e vigências próprias.
+- Uma fatura pertence à unidade consumidora, não diretamente ao medidor.
+- A fatura preserva snapshots dos valores e parâmetros utilizados na emissão.
+- Clientes e unidades com histórico não devem ser apagados fisicamente como operação comum; deve-se priorizar desativação lógica.
+- Regras regulatórias ainda não validadas não devem ser transformadas em fórmulas definitivas por suposição.
+
+## 🔄 Fluxo de faturamento
+
+Visão conceitual do domínio:
+
+```text
+Cliente
+   │
+   ▼
+Unidade Consumidora
+   │
+   ├── Medidor(es) ── Leituras ──► Consumo do período
+   │
+   └── Enquadramento tarifário
+             │
+             ▼
+       Tarifa TE + TUSD
+             │
+             ├── Bandeiras aplicáveis ao ciclo
+             │
+             └── Regras tributárias aplicáveis
+                       │
+                       ▼
+                  Fatura
+                       │
+                       ▼
+                    Pagamento
+```
+
+### Tarifa de energia: TE e TUSD
+
+A tarifa é composta por dois componentes independentes:
+
+- **TE:** Tarifa de Energia.
+- **TUSD:** Tarifa de Uso do Sistema de Distribuição.
+
+Cálculo tarifário básico:
+
+```text
+ValorTE   = Consumo (kWh) × TE
+ValorTUSD = Consumo (kWh) × TUSD
+
+Composição tarifária básica = ValorTE + ValorTUSD
+```
+
+Essa composição não representa necessariamente o total final da fatura. A tarifa deve corresponder à distribuidora, subgrupo, classe e modalidade da unidade consumidora, e estar vigente no início da competência. Reajustes encerram a vigência anterior e criam um novo registro, sem apagar o histórico.
+
+### Bandeiras tarifárias
+
+O cadastro do valor adicional (`BandeiraTarifaria`) é separado do registro de acionamento oficial (`AcionamentoBandeira`).
+
+Um ciclo de faturamento pode atravessar mais de um período de bandeira. A aplicação deve considerar os períodos efetivamente abrangidos pelo ciclo. A distribuição do consumo entre esses períodos deve seguir a regra regulatória aplicável; não se deve presumir rateio proporcional sem validação.
+
+### Tributos
+
+Os tributos são modelados individualmente:
+
+- **ICMS:** abrangência estadual.
+- **PIS e COFINS:** abrangência federal.
+- **CIP/COSIP:** abrangência municipal.
+
+Bases de cálculo, hipóteses de incidência, fórmulas e arredondamentos dependem das normas aplicáveis. A implementação desses cálculos exige validação regulatória e tributária; não se presume que todos os tributos incidam sobre a mesma base.
+
+### Fatura e pagamento
+
+- A fatura pertence à unidade consumidora.
+- A competência é representada pelo primeiro dia do mês.
+- Deve existir no máximo uma fatura por unidade consumidora e competência.
+- A origem do consumo é identificada como `LEITURA` ou `MANUAL`.
+- O status inicial é `PENDENTE`; após o registro do pagamento, passa a `PAGO`.
+- O pagamento será manual na primeira versão, sem integração com gateway.
+- Não deve ser permitido registrar pagamento duplicado.
+- Os snapshots da fatura preservam os valores usados no momento da emissão.
+
+## 🧱 Modelo de domínio
 
 ### Relacionamentos principais
 
 ```text
-Cliente 1 ───── N UnidadeConsumidora
-UnidadeConsumidora 1 ───── N Medidor
-Medidor 1 ───── N Leitura
-UnidadeConsumidora 1 ───── N Fatura
+Cliente 1 ───────── N UnidadeConsumidora
+UnidadeConsumidora 1 ───────── N Medidor
+Medidor 1 ───────── N Leitura
+UnidadeConsumidora 1 ───────── N Fatura
 
-Fatura 1 ───── N FaturaBandeiraAplicada
-Fatura 1 ───── N FaturaTributo
+Fatura 1 ───────── N FaturaBandeiraAplicada
+Fatura 1 ───────── N FaturaTributo
 
 FaturaBandeiraAplicada N ───── 1 AcionamentoBandeira
-FaturaTributo N ───── 1 RegraTributaria
+FaturaTributo N ────────────── 1 RegraTributaria
 
-Usuario 0..1 ───── 1 Cliente
+Usuario 0..1 ───────────────── 1 Cliente
 ```
 
 ### Entidades
 
-| Entidade | Responsabilidade |
+| Entidade | Responsabilidade e principais conceitos |
 | --- | --- |
-| `Cliente` | Representa a pessoa física ou jurídica titular de unidades consumidoras. |
-| `UnidadeConsumidora` | Representa a instalação elétrica; concentra endereço e características tarifárias. |
-| `Medidor` | Representa o equipamento instalado em uma unidade consumidora, preservando seu ciclo de instalação e retirada. |
-| `Leitura` | Registra o valor acumulado do medidor, data/hora e natureza real ou estimada. |
+| `Cliente` | Representa a pessoa física ou jurídica titular de unidades consumidoras; concentra dados pessoais e contato. |
+| `UnidadeConsumidora` | Representa a instalação elétrica; concentra endereço, distribuidora, classe, subgrupo e modalidade tarifária. |
+| `Medidor` | Representa o equipamento instalado na unidade, com número, tipo, ligação, situação ativa e datas de instalação/retirada. |
+| `Leitura` | Registra valor acumulado, data/hora, tipo real ou estimado e medidor correspondente. |
 | `Taxa` | Armazena TE e TUSD por distribuidora, subgrupo, classe, modalidade e vigência. |
-| `BandeiraTarifaria` | Armazena o valor adicional oficial por kWh de cada tipo de bandeira e sua vigência. |
-| `AcionamentoBandeira` | Registra qual bandeira foi oficialmente acionada em determinado período. |
-| `RegraTributaria` | Define parâmetros de uma regra tributária conforme tributo, abrangência, localização, tipo de cálculo e vigência. |
-| `Fatura` | Registra a cobrança da unidade consumidora, competência, consumo, snapshots tarifários, valores e status. |
+| `BandeiraTarifaria` | Armazena o valor adicional por kWh de cada tipo de bandeira e sua vigência. |
+| `AcionamentoBandeira` | Registra a bandeira oficialmente acionada e o período correspondente. |
+| `Fatura` | Representa a cobrança da unidade consumidora, competência, consumo, snapshots tarifários, valores e status. |
 | `FaturaBandeiraAplicada` | Registra os períodos e valores de bandeira considerados em uma fatura. |
+| `RegraTributaria` | Define parâmetros de tributos por abrangência, localização, tipo de cálculo e vigência. |
 | `FaturaTributo` | Registra o tributo calculado e os parâmetros aplicados como snapshot da fatura. |
 | `Usuario` | Representa a conta de acesso, seu perfil e eventual associação a um cliente. |
 
@@ -93,145 +191,237 @@ Usuario 0..1 ───── 1 Cliente
 - `TipoTributo`: `ICMS`, `PIS`, `COFINS`, `CIP_COSIP`.
 - `TipoUsuario`: `ADMINISTRADOR`, `CLIENTE`.
 
-## Regras centrais de faturamento
+## 📦 DTOs e mapeamento
 
-### Tarifa de energia
+Os DTOs definem os contratos de entrada, atualização e resposta da API, evitando expor diretamente entidades JPA. O projeto utiliza MapStruct para conversão entre DTOs e entidades.
 
-A tarifa é composta por dois componentes independentes:
+Com a remodelagem do domínio, os contratos antigos precisam ser revistos para refletir os novos relacionamentos e conceitos:
 
-- **TE:** Tarifa de Energia.
-- **TUSD:** Tarifa de Uso do Sistema de Distribuição.
+| Domínio | Diretriz para os DTOs |
+| --- | --- |
+| Cliente | Dados cadastrais e de contato; sem endereço da instalação. |
+| UnidadeConsumidora | Dados da instalação, endereço, distribuidora e enquadramento tarifário; recebe a referência do cliente. |
+| Medidor | Dados do equipamento e vínculo com unidade consumidora; datas de instalação e retirada. |
+| Leitura | Valor, data/hora, tipo de leitura e referência ao medidor. |
+| Taxa | TE, TUSD, combinação tarifária e vigência. |
+| Bandeiras | Cadastro de valores e registro dos acionamentos em contratos próprios. |
+| Fatura | Competência, período, consumo, origem, valores e status; sem expor entidades relacionadas. |
+| Tributos | Regras e valores aplicados representados separadamente. |
+| Usuário | Dados de acesso e perfil; nunca devolver senha ou hash no DTO de resposta. |
 
-Fórmula tarifária básica:
+Validações declarativas com Bean Validation complementam, mas não substituem, as validações de negócio nos services. Quando os controllers forem implementados, os parâmetros de entrada deverão acionar a validação com `@Valid`.
+
+### Mappers
+
+Os mappers devem permanecer responsáveis apenas pela conversão de dados. Resolução de relacionamentos, autorização, validações de existência, vigência e regras de cálculo pertencem à camada de aplicação/domínio. Campos controlados pelo sistema — como identificadores gerados, snapshots calculados e hash de senha — não devem ser aceitos indiscriminadamente por mapeamento automático.
+
+## 🗄️ Repositórios
+
+Os repositórios utilizam Spring Data JPA e devem oferecer consultas coerentes com o novo modelo. A remodelagem altera as chaves de pesquisa que existiam na estrutura anterior: por exemplo, faturas passam a ser consultadas por unidade consumidora e competência, e medidores por unidade e situação.
+
+Consultas e verificações importantes previstas:
+
+- cliente e suas unidades consumidoras;
+- unidade por distribuidora e código;
+- medidores de uma unidade e medidor ativo;
+- leituras de um medidor ordenadas cronologicamente;
+- tarifa vigente para distribuidora, subgrupo, classe, modalidade e data;
+- detecção de sobreposição de vigências tarifárias;
+- acionamentos de bandeira que cruzam determinado intervalo;
+- regras tributárias vigentes conforme tipo, abrangência e localização;
+- fatura por unidade consumidora e competência;
+- faturas por unidade consumidora em ordem cronológica;
+- usuário por username e associação única com cliente.
+
+Os métodos concretos devem ser conferidos e atualizados durante a etapa de repositories; esta documentação não afirma que todas essas consultas já estejam implementadas.
+
+## ⚙️ Services e regras de aplicação
+
+Os services concentram validações, coordenação dos repositórios, transações e regras de negócio. A nova modelagem exige que os fluxos antigos sejam remodelados, e não apenas renomeados.
+
+| Service/domínio | Responsabilidades esperadas |
+| --- | --- |
+| Cliente | Cadastro, consulta e desativação lógica, preservando vínculos históricos. |
+| UnidadeConsumidora | Cadastro e atualização da instalação; validação do cliente e da combinação distribuidora/código. |
+| Medidor | Instalação, consulta, atualização permitida e retirada/substituição, preservando histórico. |
+| Leitura | Registro e consulta cronológica; validação de duplicidade, sequência e consistência dos valores. |
+| Taxa | Cadastro, consulta por vigência, prevenção de sobreposição e criação de nova vigência sem apagar histórico. |
+| BandeiraTarifaria / AcionamentoBandeira | Manutenção dos valores oficiais e dos períodos de acionamento, sem confundir cadastro com aplicação. |
+| RegraTributaria | Manutenção de parâmetros por tributo, abrangência, localização e vigência. |
+| Fatura | Obtenção do consumo, seleção de tarifa e regras aplicáveis, composição dos componentes, snapshots, geração e pagamento. |
+| Usuário | Cadastro, unicidade de username, associação conforme perfil e operações de autenticação/autorização. |
+
+### Pontos críticos de implementação
+
+- Operações de geração de fatura devem ser transacionais e impedir duplicidade por unidade/competência.
+- Regras de vigência devem considerar limites de período de maneira consistente.
+- Substituição de medidor não pode apagar leituras ou faturas históricas.
+- Leituras estimadas e situações de troca/reinicialização exigem tratamento explícito.
+- Cálculos devem utilizar `BigDecimal` e snapshots persistidos.
+- A autorização deve garantir que um usuário cliente só consulte recursos das próprias unidades.
+- A senha deve ser armazenada com hash seguro via `PasswordEncoder` (por exemplo, BCrypt); comparação em texto puro não é aceitável.
+- Cálculos tributários e rateio de bandeiras dependem de validação normativa antes de serem considerados definitivos.
+
+## 🧰 Tecnologias e arquitetura
+
+### Tecnologias
+
+| Tecnologia | Utilização |
+| --- | --- |
+| Java 21 | Linguagem da aplicação |
+| Spring Boot 4.1.1 | Configuração e execução |
+| Spring Data JPA / Hibernate | Persistência e ORM |
+| Maven | Build e gerenciamento de dependências |
+| H2 | Banco em memória para desenvolvimento e testes |
+| MySQL 8.4 | Banco previsto para produção |
+| MapStruct 1.6.3 | Mapeamento entre DTOs e entidades |
+| Lombok | Redução de código repetitivo |
+| Bean Validation | Validação declarativa |
+| JUnit 5, Mockito e AssertJ | Testes automatizados |
+| JaCoCo 0.8.14 | Relatório de cobertura |
+| Flyway | Estratégia definida para versionamento do schema |
+
+### Organização lógica
 
 ```text
-ValorTE + ValorTUSD = Consumo (kWh) × (TE + TUSD)
+com.powermanager.powermanager
+├── controller/   # Endpoints REST
+├── dto/          # Contratos de entrada e saída
+├── entity/       # Entidades JPA
+├── enums/        # Enumerações do domínio
+├── exception/    # Exceções e tratamento de erros
+├── mapper/       # Conversão com MapStruct
+├── repository/  # Consultas e persistência
+└── services/    # Regras de negócio e transações
 ```
 
-Esse resultado é a composição tarifária básica, não necessariamente o total da fatura. A tarifa aplicável deve corresponder à combinação da distribuidora, subgrupo, classe e modalidade da unidade, e estar vigente no início da competência.
+A estrutura acima representa a separação lógica de responsabilidades. Os pacotes e classes concretos devem ser alinhados ao estado atual do código durante a refatoração.
 
-Os períodos de vigência não podem se sobrepor para a mesma combinação tarifária. Um reajuste encerra o registro anterior e cria um novo, sem apagar o histórico.
+### Fluxo entre camadas
 
-### Bandeiras tarifárias
+```text
+Requisição HTTP
+      │
+      ▼
+  Controller
+      │
+      ▼
+    DTO ───────► Mapper
+                   │
+                   ▼
+                Service ◄──── Repository
+                   │               │
+                   ▼               ▼
+              DTO de resposta   Banco de dados
+```
 
-O cadastro do valor adicional da bandeira (`BandeiraTarifaria`) é separado do registro do acionamento oficial (`AcionamentoBandeira`).
+Controllers não devem conter regras de negócio, repositories não devem calcular faturas e entidades JPA não devem ser expostas diretamente como contratos HTTP.
 
-Um ciclo de faturamento pode atravessar mais de um período de bandeira. Por isso, a aplicação deve considerar os períodos efetivamente abrangidos pelo ciclo, sem presumir que uma única bandeira vale para toda a fatura.
+## 🚀 Execução
 
-`FaturaBandeiraAplicada` preserva os dados utilizados no cálculo. A distribuição do consumo entre períodos deve seguir a regra regulatória aplicável; não se deve assumir rateio proporcional sem validação.
+### Pré-requisitos
 
-### Tributos
+- JDK 21;
+- Git;
+- Maven Wrapper incluído no projeto;
+- Docker com Docker Compose para executar o MySQL localmente.
 
-Os tributos são modelados separadamente:
+### Desenvolvimento com H2
 
-- ICMS: abrangência estadual;
-- PIS e COFINS: abrangência federal;
-- CIP/COSIP: abrangência municipal.
+O profile `dev` utiliza H2 em memória para desenvolvimento e testes. Os dados desse banco são temporários e podem ser recriados ao reiniciar a aplicação, conforme a configuração vigente.
 
-Cada regra possui localização, tipo de cálculo, parâmetros e vigência próprios. A fatura armazena snapshots dos parâmetros e do valor efetivamente aplicado. Fórmulas, bases de cálculo, hipóteses de incidência e arredondamentos específicos precisam ser validados antes da implementação do cálculo tributário.
+Linux/macOS:
 
-### Fatura
+```bash
+./mvnw spring-boot:run
+```
 
-- A fatura pertence à `UnidadeConsumidora`, não diretamente ao medidor.
-- A competência é representada pelo primeiro dia do mês.
-- Não pode haver mais de uma fatura para a mesma unidade e competência.
-- A origem do consumo é identificada como `LEITURA` ou `MANUAL`.
-- A fatura preserva os valores aplicados no momento da geração.
-- O status inicial é `PENDENTE`; após o registro do pagamento, passa a `PAGO`.
-- O pagamento é manual nesta primeira versão e não admite registro duplicado.
+Windows:
 
-### Precisão numérica
+```powershell
+.\mvnw.cmd spring-boot:run
+```
 
-- Utilizar `BigDecimal` para consumo, tarifas, alíquotas e valores monetários.
-- Não utilizar `float` ou `double` em cálculos financeiros.
-- TE e TUSD: precisão definida no modelo como `DECIMAL(12,6)`.
-- Consumo e leituras: `DECIMAL(12,3)`.
-- Valores monetários consolidados: `DECIMAL(14,2)`.
-- O arredondamento geral inicial é `HALF_UP`; a regra específica por componente depende de validação regulatória.
+Se o console H2 estiver habilitado na configuração local, os parâmetros de acesso devem ser consultados no `application-dev.yml`.
 
-## Arquitetura
+### Banco MySQL
 
-A organização lógica prevista separa responsabilidades:
+O profile `prod` está previsto para utilizar MySQL. Configure as variáveis de ambiente exigidas pelo `docker-compose.yml` e pelo arquivo `application-prod.yml`; não versione credenciais reais.
 
-| Camada | Responsabilidade |
-| --- | --- |
-| `entity` | Entidades JPA e relacionamentos persistentes. |
-| `enums` | Valores enumerados do domínio. |
-| `dto` | Contratos de entrada, atualização e resposta. |
-| `mapper` | Conversão entre entidades e DTOs com MapStruct. |
-| `repository` | Persistência e consultas com Spring Data JPA. |
-| `services` | Regras de negócio, validações e transações. |
-| `controller` | Exposição dos endpoints REST. |
-| `exception` | Exceções e tratamento consistente de erros. |
+```bash
+docker compose up -d
+```
 
-Os controllers, autenticação/autorização e as camadas de aplicação remodeladas devem ser implementados ou alinhados às novas entidades antes de considerar a API pronta para uso externo.
+A execução da aplicação com o profile de produção depende de o schema estar previamente compatível com as entidades. A estratégia de migrations com Flyway deve ser concluída antes de considerar esse fluxo pronto para produção.
 
-## Tecnologias
+## 🧪 Testes e cobertura
 
-A configuração do repositório utiliza:
+O projeto utiliza JUnit 5, Mockito e AssertJ para testes automatizados, além de JaCoCo para relatório de cobertura.
 
-- Java 21;
-- Spring Boot 4.1.1;
-- Spring Data JPA / Hibernate;
-- Maven;
-- MySQL 8.4 para o ambiente de produção;
-- H2 em memória para desenvolvimento;
-- MapStruct 1.6.3;
-- Lombok;
-- Bean Validation;
-- JUnit 5, Mockito e AssertJ nos testes existentes;
-- JaCoCo 0.8.14 para relatório de cobertura.
+A refatoração deve ampliar a cobertura para além dos testes unitários de services e mappers, incluindo:
 
-O profile `dev` utiliza H2 em memória. O profile `prod` utiliza MySQL e `ddl-auto: validate`.
+- inicialização do contexto JPA;
+- persistência e recuperação de entidades relacionadas em H2;
+- constraints, índices e unicidades;
+- regras de vigência tarifária e tributária;
+- leituras cronológicas e troca de medidor;
+- geração de faturas e preservação dos snapshots;
+- aplicação de bandeiras em ciclos que cruzam períodos;
+- autorização e isolamento dos dados por cliente.
 
-> **Banco de dados e migrations:** Flyway foi definido como estratégia de versionamento do schema na especificação consolidada. A adoção efetiva deve ser confirmada na configuração/dependências e nas migrations do repositório antes de ser considerada concluída. O `create-drop` do profile de desenvolvimento também deverá ser revisto para não competir com o Flyway.
+Comando usual de verificação Maven:
 
-## Estado da implementação
+```bash
+./mvnw clean verify
+```
 
-O estado abaixo distingue o que foi verificado no código disponibilizado do que ainda é decisão ou trabalho futuro.
+No Windows:
 
-### Verificado nas entidades e enums
+```powershell
+.\mvnw.cmd clean verify
+```
 
-- [x] `Cliente` separado de endereço e instalação.
-- [x] `UnidadeConsumidora` associada a `Cliente`.
-- [x] `Medidor` associado a `UnidadeConsumidora`, com `ativo`, `dataInstalacao` e `dataRetirada`.
-- [x] `Leitura` associada a `Medidor`, com `BigDecimal`, `LocalDateTime` e `TipoLeitura`.
-- [x] `Taxa` remodelada para TE/TUSD e vigência.
-- [x] `BandeiraTarifaria` separada de `AcionamentoBandeira`.
-- [x] `FaturaBandeiraAplicada` com snapshots por período.
-- [x] `RegraTributaria` e `FaturaTributo`.
-- [x] `Fatura` associada à unidade consumidora e com snapshots de TE/TUSD e valores consolidados.
-- [x] `Usuario` com associação opcional e única a `Cliente`.
-- [x] Enums do domínio remodelado.
-- [x] Índices e constraints JPA presentes em parte das entidades.
+Os percentuais de cobertura devem ser obtidos da execução atual do JaCoCo; não são publicados números sem uma execução correspondente.
 
-### Ainda não comprovado como concluído
+## 📍 Estado atual e roadmap
 
-- [ ] Serviços de negócio alinhados integralmente ao novo modelo de unidade, leituras, tarifas, bandeiras e tributação.
-- [ ] DTOs e mappers atualizados para todos os novos relacionamentos e entidades.
-- [ ] Repositórios e consultas do novo modelo.
-- [ ] Controllers e endpoints REST.
-- [ ] Spring Security, hash de senhas com `PasswordEncoder` e autorização por propriedade do recurso.
-- [ ] Flyway e migrations versionadas.
-- [ ] Testes de persistência e integração cobrindo os relacionamentos remodelados.
-- [ ] Validação regulatória das fórmulas e bases tributárias.
-- [ ] Auditoria das alterações administrativas e tarifárias.
+O projeto está em uma refatoração estrutural do domínio. A lista abaixo separa decisões/modelagem consolidadas das etapas que ainda precisam ser implementadas e validadas.
 
-A existência de uma entidade ou constraint JPA não significa que o fluxo de negócio correspondente já esteja implementado ou testado.
+### Diretrizes consolidadas
 
-## Próximas etapas
+- [x] Separar Cliente de UnidadeConsumidora.
+- [x] Centralizar endereço e enquadramento tarifário na UnidadeConsumidora.
+- [x] Relacionar Medidor à UnidadeConsumidora e preservar seu histórico.
+- [x] Modelar leituras reais e estimadas.
+- [x] Separar TE e TUSD.
+- [x] Separar cadastro de bandeira e acionamento oficial.
+- [x] Modelar regras tributárias por abrangência e localização.
+- [x] Relacionar Fatura à UnidadeConsumidora.
+- [x] Preservar snapshots tarifários, de bandeira e tributários.
+- [x] Definir perfis de usuário e regras de associação com Cliente.
+- [x] Definir uso de BigDecimal e precisões decimais.
 
-1. Finalizar e validar entidades e enums, incluindo testes de persistência no H2.
-2. Remodelar DTOs.
-3. Atualizar mappers.
-4. Remodelar repositories.
-5. Implementar services e regras transacionais.
-6. Implementar controllers e endpoints.
-7. Implementar Spring Security e autorização.
-8. Configurar Flyway e migrations.
-9. Expandir testes unitários, de integração e de persistência.
-10. Fazer validação final do fluxo de faturamento e da integridade histórica.
+### Etapas de implementação
 
-## Documentação
+1. [ ] Finalizar validação de entidades e enums, incluindo persistência real no H2.
+2. [ ] Remodelar DTOs.
+3. [ ] Atualizar mappers.
+4. [ ] Remodelar repositories e consultas.
+5. [ ] Implementar services e regras transacionais.
+6. [ ] Implementar controllers e endpoints REST.
+7. [ ] Implementar Spring Security, hash de senhas e autorização por recurso.
+8. [ ] Configurar Flyway e migrations versionadas.
+9. [ ] Expandir testes unitários, integração e persistência.
+10. [ ] Validar cálculos tarifários, bandeiras e tributos com as normas aplicáveis.
+11. [ ] Realizar validação final de integridade, histórico e documentação da API.
 
-- [`ESPECIFICACAO_CONSOLIDADA.md`](ESPECIFICACAO_CONSOLIDADA.md): regras de negócio, modelo de domínio, decisões posteriores ao PDF, pendências e critérios de implementação.
+## 📄 Documentação
+
+- [Especificação consolidada de regras de negócio e arquitetura](ESPECIFICACAO_CONSOLIDADA.md) — documento de referência para as decisões do domínio, relacionamentos, restrições, pendências e roteiro da refatoração.
+
+## 📜 Licença e autor
+
+Este projeto está licenciado sob a [MIT License](LICENSE).
+
+**Gustavo de Jesus Silva**  
+GitHub: [@GustavoJ-dev](https://github.com/GustavoJ-dev)
