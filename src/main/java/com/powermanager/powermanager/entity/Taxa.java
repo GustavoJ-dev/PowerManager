@@ -1,5 +1,8 @@
 package com.powermanager.powermanager.entity;
 
+import com.powermanager.powermanager.enums.ClasseConsumo;
+import com.powermanager.powermanager.enums.ModalidadeTarifaria;
+import com.powermanager.powermanager.enums.SubgrupoTarifario;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -8,20 +11,34 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
-@Table(name = "taxa", check = {
-        @CheckConstraint(name = "ck_taxa_custo", constraint = "custo_por_unidade >= 0"),
-        @CheckConstraint(name = "ck_taxa_aluguel", constraint = "aluguel_medidor >= 0"),
-        @CheckConstraint(name = "ck_taxa_servico", constraint = "taxa_servico >= 0"),
-        @CheckConstraint(name = "ck_taxa_imposto", constraint = "imposto_servico >= 0"),
-        @CheckConstraint(name = "ck_taxa_cess", constraint = "cess >= 0"),
-        @CheckConstraint(name = "ck_taxa_fixa", constraint = "taxa_fixa >= 0"),
-        @CheckConstraint(name = "ck_taxa_vigencia",
-                constraint = "fim_vigencia IS NULL OR fim_vigencia > inicio_vigencia")
-})
+@Table(
+        name = "taxa",
+       indexes = {
+            @Index(
+                    name = "idx_taxa_busca_vigencia",
+                    columnList = "distribuidora, subgrupo_tarifario, classe_consumo, " +
+                            "modalidade_tarifaria, inicio_vigencia"
+            )
+       },
+       check = {
+        @CheckConstraint(
+                name = "ck_taxa_te",
+                constraint = "tarifa_energia >=0"
+        ),
+        @CheckConstraint(
+                name = "ck_taxa_tusd",
+                constraint = "tarifa_uso_distribuicao >= 0"
+        ),
+        @CheckConstraint(
+                name = "ck_taxa_vigencia",
+                constraint = "fim_vigencia IS NULL OR fim_vigencia > inicio_vigencia"
+        )
+    }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -33,28 +50,32 @@ public class Taxa {
     @Column(name = "id", nullable = false, length = 36)
     private UUID id;
 
-    @Column(name = "custo_por_unidade", nullable = false, precision = 10, scale = 2)
-    private BigDecimal custoPorUnidade;
+    @Column(name = "distribuidora", nullable = false, length = 120)
+    private String distribuidora;
 
-    @Column(name = "aluguel_medidor", nullable = false, precision = 10, scale = 2)
-    private BigDecimal aluguelMedidor;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "subgrupo_tarifario", nullable = false, length = 10)
+    private SubgrupoTarifario subgrupoTarifario;
 
-    @Column(name = "taxa_servico", nullable = false, precision = 10, scale = 2)
-    private BigDecimal taxaServico;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "classe_consumo", nullable = false, length = 30)
+    private ClasseConsumo classeConsumo;
 
-    @Column(name = "imposto_servico", nullable = false, precision = 10, scale = 2)
-    private BigDecimal impostoServico;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "modalidade_tarifaria", nullable = false, length = 20)
+    private ModalidadeTarifaria modalidadeTarifaria;
 
-    @Column(name = "cess", nullable = false, precision = 10, scale = 2)
-    private BigDecimal cess;
+    @Column(name = "tarifa_energia", nullable = false, precision = 12, scale = 6)
+    private BigDecimal tarifaEnergia;
 
-    @Column(name = "taxa_fixa", nullable = false, precision = 10, scale = 2)
-    private BigDecimal taxaFixa;
+    @Column(name = "tarifa_uso_distribuicao", nullable = false, precision = 12, scale = 6)
+    private BigDecimal tarifaUsoDistribuicao;
 
     @Column(name = "inicio_vigencia", nullable = false)
-    private LocalDateTime inicioVigencia;
+    private LocalDate inicioVigencia;
 
     @Column(name = "fim_vigencia")
-    private LocalDateTime fimVigencia;
+    private LocalDate fimVigencia;
+
 
 }

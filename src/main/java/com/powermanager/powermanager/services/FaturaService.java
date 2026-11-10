@@ -6,7 +6,7 @@ import com.powermanager.powermanager.dto.fatura.FaturaResponseDTO;
 import com.powermanager.powermanager.dto.taxa.TaxaResponseDTO;
 import com.powermanager.powermanager.entity.Fatura;
 import com.powermanager.powermanager.entity.Medidor;
-import com.powermanager.powermanager.entity.enums.StatusFatura;
+import com.powermanager.powermanager.enums.StatusFatura;
 import com.powermanager.powermanager.exception.FaturaAlreadyExistsException;
 import com.powermanager.powermanager.exception.FaturaAlreadyPaidException;
 import com.powermanager.powermanager.exception.FaturaNotFoundException;

@@ -1,6 +1,7 @@
 package com.powermanager.powermanager.entity;
 
-import com.powermanager.powermanager.entity.enums.StatusFatura;
+import com.powermanager.powermanager.enums.OrigemConsumo;
+import com.powermanager.powermanager.enums.StatusFatura;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -14,23 +15,30 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
-@Table(name = "fatura",
+@Table(
+        name = "fatura",
         uniqueConstraints = {
-            @UniqueConstraint(name = "uk_fatura_medidor_competencia",
-                            columnNames = {"medidor_id", "competencia"}
-             )
+                @UniqueConstraint(
+                        name = "uk_fatura_unidade_competencia",
+                        columnNames = {"unidade_consumidora_id", "competencia"}
+                )
         },
-        check = {
-            @CheckConstraint(name = "ck_fatura_unidades", constraint = "unidades_consumidas >= 0"),
-            @CheckConstraint(name = "ck_fatura_valor", constraint = "valor_total >= 0"),
-            @CheckConstraint(name = "ck_fatura_status", constraint = "status IN('PENDENTE', 'PAGO')"),
-            @CheckConstraint(name = "ck_fatura_aluguel", constraint = "aluguel_medidor_aplicado >= 0"),
-            @CheckConstraint(name = "ck_fatura_cess", constraint = "cess_aplicado >= 0"),
-            @CheckConstraint(name = "ck_fatura_custo_unidade", constraint = "custo_por_unidade_aplicado >= 0"),
-            @CheckConstraint(name = "ck_fatura_imposto_servico", constraint = "imposto_servico_aplicado >= 0"),
-            @CheckConstraint(name = "ck_fatura_taxa_fixa", constraint = "taxa_fixa_aplicada >= 0"),
-            @CheckConstraint(name = "ck_fatura_taxa_servico",constraint = "taxa_servico_aplicada >= 0"),
 
+        check = {
+                @CheckConstraint(
+                        name = "ck_fatura_consumo",
+                        constraint = "consumo_kwh >= 0"
+                )
+        },
+        indexes = {
+                @Index(
+                        name = "idx_fatura_competencia",
+                        columnList = "competencia"
+                ),
+                @Index(
+                        name = "idx_fatura_status",
+                        columnList = "status"
+                )
         }
 )
 @Getter
@@ -44,38 +52,66 @@ public class Fatura {
     @Column(name = "id", nullable = false, length = 36)
     private UUID id;
 
+    // Unidade consumidora responsável pela fatura
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "unidade_consumidora_id", nullable = false)
+    private UnidadeConsumidora unidadeConsumidora;
+
+    // Competência: sempre o primeiro dia do mês
     @Column(name = "competencia", nullable = false)
     private LocalDate competencia;
 
-    @Column(name = "unidades_consumidas", nullable = false, precision = 10, scale = 2)
-    private BigDecimal unidadesConsumidas;
+    // Período considerado no faturamento
+    @Column(name = "inicio_periodo", nullable = false)
+    private LocalDate inicioPeriodo;
 
-    @Column(name = "custo_por_unidade_aplicado", nullable = false, precision = 10, scale = 2)
-    private BigDecimal custoPorUnidadeAplicado;
+    @Column(name = "fim_periodo", nullable = false)
+    private LocalDate fimPeriodo;
 
-    @Column(name = "aluguel_medidor_aplicado", nullable = false, precision = 10, scale = 2)
-    private BigDecimal aluguelMedidorAplicado;
-
-    @Column(name = "taxa_servico_aplicada", nullable = false, precision = 10, scale = 2)
-    private BigDecimal taxaServicoAplicada;
-
-    @Column(name = "imposto_servico_aplicado", nullable = false, precision = 10, scale = 2)
-    private BigDecimal impostoServicoAplicado;
-
-    @Column(name = "cess_aplicado", nullable = false, precision = 10, scale = 2)
-    private BigDecimal cessAplicado;
-
-    @Column(name = "taxa_fixa_aplicada", nullable = false, precision = 10, scale = 2)
-    private BigDecimal taxaFixaAplicada;
-
-    @Column(name = "valor_total", nullable = false, precision = 10, scale = 2)
-    private BigDecimal valorTotal;
+    // Consumo faturado
+    @Column(name = "consumo_kwh", nullable = false, precision = 12, scale = 3)
+    private BigDecimal consumoKwh;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
-    private StatusFatura statusFatura;
+    @Column(name = "origem_consumo", nullable = false, length = 20)
+    private OrigemConsumo origemConsumo;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "medidor_id", nullable = false)
-    private Medidor medidor;
+    // Snapshot das tarifas TE e TUSD
+    @Column(name = "tarifa_energia_te", nullable = false, precision = 12, scale = 6)
+    private BigDecimal tarifaEnergiaTE;
+
+    @Column(name = "tarifa_uso_distribuicao_tusd", nullable = false, precision = 12, scale = 6)
+    private BigDecimal tarifaUsoDistribuicaoTUSD;
+
+    @Column(name = "valor_te", nullable = false, precision = 14, scale = 2)
+    private BigDecimal valorTE;
+
+    @Column(name = "valor_tusd", nullable = false, precision = 14, scale = 2)
+    private BigDecimal valorTUSD;
+
+    // Snapshot do valor total adicional das bandeiras aplicadas
+    @Column(name = "valor_bandeira", nullable = false, precision = 14, scale = 2)
+    private BigDecimal valorBandeira;
+
+    // Valores consolidados
+    @Column(name = "valor_subtotal", nullable = false, precision = 14, scale = 2)
+    private BigDecimal valorSubtotal;
+
+    @Column(name = "valor_total", nullable = false, precision = 14, scale = 2)
+    private BigDecimal valorTotal;
+
+    // Datas da fatura
+    @Column(name = "data_emissao", nullable = false)
+    private LocalDate dataEmissao;
+
+    @Column(name = "data_vencimento", nullable = false)
+    private LocalDate dataVencimento;
+
+    @Column(name = "data_pagamento")
+    private LocalDate dataPagamento;
+
+    // Situação da fatura
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private StatusFatura status;
 }

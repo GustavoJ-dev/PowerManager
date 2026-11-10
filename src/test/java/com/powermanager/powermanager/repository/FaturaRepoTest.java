@@ -3,10 +3,10 @@ package com.powermanager.powermanager.repository;
 import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.entity.Fatura;
 import com.powermanager.powermanager.entity.Medidor;
-import com.powermanager.powermanager.entity.enums.ClasseConsumo;
-import com.powermanager.powermanager.entity.enums.StatusFatura;
-import com.powermanager.powermanager.entity.enums.TipoLigacao;
-import com.powermanager.powermanager.entity.enums.TipoMedidor;
+import com.powermanager.powermanager.enums.ClasseConsumo;
+import com.powermanager.powermanager.enums.StatusFatura;
+import com.powermanager.powermanager.enums.TipoLigacao;
+import com.powermanager.powermanager.enums.TipoMedidor;
 
 import jakarta.persistence.EntityManager;
 

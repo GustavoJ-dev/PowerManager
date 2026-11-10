@@ -3,6 +3,7 @@ package com.powermanager.powermanager.mapper;
 import com.powermanager.powermanager.dto.fatura.FaturaResponseDTO;
 import com.powermanager.powermanager.entity.Fatura;
 import com.powermanager.powermanager.entity.Medidor;
+import com.powermanager.powermanager.enums.StatusFatura;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -17,6 +18,7 @@ class FaturaMapperTest {
 
     @Test
     void deveConverterEntidadeParaResponseDTO() {
+
         UUID id = UUID.randomUUID();
         UUID medidorId = UUID.randomUUID();
 
@@ -35,15 +37,16 @@ class FaturaMapperTest {
         fatura.setCessAplicado(new BigDecimal("0.50"));
         fatura.setTaxaFixaAplicada(new BigDecimal("5.00"));
         fatura.setValorTotal(new BigDecimal("201.25"));
+        fatura.setStatusFatura(StatusFatura.PENDENTE);
 
-        // Se a entidade exigir um status no construtor,
-        // ajuste este teste conforme a implementação real.
         FaturaResponseDTO dto = mapper.paraResponseDTO(fatura);
 
         assertNotNull(dto);
+
         assertEquals(id, dto.id());
         assertEquals(medidorId, dto.medidorId());
         assertEquals(LocalDate.of(2026, 1, 1), dto.competencia());
+
         assertEquals(new BigDecimal("120.50"), dto.unidadesConsumidas());
         assertEquals(new BigDecimal("1.50"), dto.custoPorUnidadeAplicado());
         assertEquals(new BigDecimal("10.00"), dto.aluguelMedidorAplicado());
@@ -52,5 +55,7 @@ class FaturaMapperTest {
         assertEquals(new BigDecimal("0.50"), dto.cessAplicado());
         assertEquals(new BigDecimal("5.00"), dto.taxaFixaAplicada());
         assertEquals(new BigDecimal("201.25"), dto.valorTotal());
+
+        assertEquals(StatusFatura.PENDENTE, dto.statusFatura());
     }
 }

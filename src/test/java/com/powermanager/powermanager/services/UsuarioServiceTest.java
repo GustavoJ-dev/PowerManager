@@ -5,7 +5,7 @@ import com.powermanager.powermanager.dto.usuario.UsuarioCadastroDTO;
 import com.powermanager.powermanager.dto.usuario.UsuarioResponseDTO;
 import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.entity.Usuario;
-import com.powermanager.powermanager.entity.enums.TipoUsuario;
+import com.powermanager.powermanager.enums.TipoUsuario;
 import com.powermanager.powermanager.exception.ClienteNotFoundException;
 import com.powermanager.powermanager.exception.UsernameAlreadyExistsException;
 import com.powermanager.powermanager.exception.UsuarioNotFoundException;

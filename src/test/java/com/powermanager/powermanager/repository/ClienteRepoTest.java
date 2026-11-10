@@ -1,11 +1,10 @@
 package com.powermanager.powermanager.repository;
 
-import com.mysql.cj.xdevapi.Client;
 import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.entity.Medidor;
-import com.powermanager.powermanager.entity.enums.ClasseConsumo;
-import com.powermanager.powermanager.entity.enums.TipoLigacao;
-import com.powermanager.powermanager.entity.enums.TipoMedidor;
+import com.powermanager.powermanager.enums.ClasseConsumo;
+import com.powermanager.powermanager.enums.TipoLigacao;
+import com.powermanager.powermanager.enums.TipoMedidor;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

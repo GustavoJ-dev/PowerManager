@@ -1,4 +1,4 @@
-package com.powermanager.powermanager.entity.enums;
+package com.powermanager.powermanager.enums;
 
 public enum StatusFatura {
 

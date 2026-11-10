@@ -29,22 +29,13 @@ public class Cliente {
     @Column(name = "nome",nullable = false, length = 100)
     private String nome;
 
-    @Column(name = "endereco",nullable = false, length = 200)
-    private String endereco;
-
-    @Column(name = "cidade",nullable = false, length = 100)
-    private String cidade;
-
-    @Column(name = "estado",nullable = false, length = 50)
-    private String estado;
-
     @Column(name = "email",nullable = false, length = 150)
     private String email;
 
     @Column(name = "telefone", nullable = false, length = 20)
     private String telefone;
 
-    @OneToMany(mappedBy = "cliente")
-    private List<Medidor> medidores = new ArrayList<>();
+    @OneToMany(mappedBy = "cliente", fetch = FetchType.LAZY)
+    private List<UnidadeConsumidora> unidadeConsumidoras = new ArrayList<>();
 
 }

@@ -1,6 +1,6 @@
 package com.powermanager.powermanager.dto.fatura;
 
-import com.powermanager.powermanager.entity.enums.StatusFatura;
+import com.powermanager.powermanager.enums.StatusFatura;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;

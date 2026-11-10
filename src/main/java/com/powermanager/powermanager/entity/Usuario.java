@@ -1,6 +1,6 @@
 package com.powermanager.powermanager.entity;
 
-import com.powermanager.powermanager.entity.enums.TipoUsuario;
+import com.powermanager.powermanager.enums.TipoUsuario;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -11,11 +11,21 @@ import org.hibernate.type.SqlTypes;
 import java.util.UUID;
 
 @Entity
-@Table(name = "usuario", uniqueConstraints = {
-                            @UniqueConstraint(name = "uk_usuario_username", columnNames = {"username"})},
-                         check = {
-                            @CheckConstraint(name = "ck_usuario_tipo",
-                                    constraint = "tipo_usuario IN ('ADMINISTRADOR', 'CLIENTE')")})
+@Table(
+        name = "usuario",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_usuario_username",
+                        columnNames = {"username"}
+                )
+        },
+        check = {
+                @CheckConstraint(
+                        name = "ck_usuario_tipo",
+                        constraint = "tipo_usuario IN ('ADMINISTRADOR', 'CLIENTE')"
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -40,7 +50,7 @@ public class Usuario {
     @Column(name = "tipo_usuario", nullable = false, length = 20)
     private TipoUsuario tipoUsuario;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cliente_id")
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cliente_id", unique = true)
     private Cliente cliente;
 }

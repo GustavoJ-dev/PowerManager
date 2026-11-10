@@ -1,6 +1,6 @@
 package com.powermanager.powermanager.dto.usuario;
 
-import com.powermanager.powermanager.entity.enums.TipoUsuario;
+import com.powermanager.powermanager.enums.TipoUsuario;
 
 import java.util.UUID;
 

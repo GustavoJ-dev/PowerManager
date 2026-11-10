@@ -2,7 +2,7 @@ package com.powermanager.powermanager.repository;
 
 import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.entity.Usuario;
-import com.powermanager.powermanager.entity.enums.TipoUsuario;
+import com.powermanager.powermanager.enums.TipoUsuario;
 
 import jakarta.persistence.EntityManager;
 

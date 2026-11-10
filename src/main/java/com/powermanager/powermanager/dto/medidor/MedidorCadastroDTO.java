@@ -1,8 +1,8 @@
 package com.powermanager.powermanager.dto.medidor;
 
-import com.powermanager.powermanager.entity.enums.ClasseConsumo;
-import com.powermanager.powermanager.entity.enums.TipoLigacao;
-import com.powermanager.powermanager.entity.enums.TipoMedidor;
+import com.powermanager.powermanager.enums.ClasseConsumo;
+import com.powermanager.powermanager.enums.TipoLigacao;
+import com.powermanager.powermanager.enums.TipoMedidor;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;

@@ -4,6 +4,8 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 .env
+# Projeto auxiliar de validação das entidades
+/entity-validation/
 
 ### STS ###
 .apt_generated

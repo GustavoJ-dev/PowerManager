@@ -5,6 +5,9 @@ import com.powermanager.powermanager.dto.medidor.MedidorCadastroDTO;
 import com.powermanager.powermanager.dto.medidor.MedidorResponseDTO;
 import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.entity.Medidor;
+import com.powermanager.powermanager.enums.ClasseConsumo;
+import com.powermanager.powermanager.enums.TipoLigacao;
+import com.powermanager.powermanager.enums.TipoMedidor;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
@@ -22,9 +25,9 @@ class MedidorMapperTest {
         MedidorCadastroDTO dto = new MedidorCadastroDTO(
                 "MED-001",
                 "Sala",
-                "Digital",
-                "A",
-                "Mensal",
+                TipoMedidor.ELETRONICO,
+                TipoLigacao.MONOFASICO,
+                ClasseConsumo.RESIDENCIAL,
                 30,
                 clienteId);
 
@@ -33,10 +36,12 @@ class MedidorMapperTest {
         assertNotNull(medidor);
         assertEquals("MED-001", medidor.getNumero());
         assertEquals("Sala", medidor.getLocalizacao());
-        assertEquals("Digital", medidor.getTipo());
-        assertEquals("A", medidor.getCodigoFase());
-        assertEquals("Mensal", medidor.getTipoFatura());
+        assertEquals(TipoMedidor.ELETRONICO, medidor.getTipoMedidor());
+        assertEquals(TipoLigacao.MONOFASICO, medidor.getTipoLigacao());
+        assertEquals(ClasseConsumo.RESIDENCIAL, medidor.getClasseConsumo());
         assertEquals(30, medidor.getDias());
+
+        // Campos que devem ser tratados pelo service
         assertNull(medidor.getId());
         assertNull(medidor.getCliente());
     }
@@ -53,9 +58,9 @@ class MedidorMapperTest {
         medidor.setId(id);
         medidor.setNumero("MED-001");
         medidor.setLocalizacao("Sala");
-        medidor.setTipo("Digital");
-        medidor.setCodigoFase("A");
-        medidor.setTipoFatura("Mensal");
+        medidor.setTipoMedidor(TipoMedidor.ELETRONICO);
+        medidor.setTipoLigacao(TipoLigacao.MONOFASICO);
+        medidor.setClasseConsumo(ClasseConsumo.RESIDENCIAL);
         medidor.setDias(30);
         medidor.setCliente(cliente);
 
@@ -65,9 +70,9 @@ class MedidorMapperTest {
         assertEquals(id, dto.id());
         assertEquals("MED-001", dto.numero());
         assertEquals("Sala", dto.localizacao());
-        assertEquals("Digital", dto.tipoMedidor());
-        assertEquals("A", dto.tipoLigacao());
-        assertEquals("Mensal", dto.classeConsumo());
+        assertEquals(TipoMedidor.ELETRONICO, dto.tipoMedidor());
+        assertEquals(TipoLigacao.MONOFASICO, dto.tipoLigacao());
+        assertEquals(ClasseConsumo.RESIDENCIAL, dto.classeConsumo());
         assertEquals(30, dto.dias());
         assertEquals(clienteId, dto.clienteId());
     }
@@ -83,29 +88,32 @@ class MedidorMapperTest {
         medidor.setId(id);
         medidor.setNumero("MED-ANTIGO");
         medidor.setLocalizacao("Antiga");
-        medidor.setTipo("Analógico");
-        medidor.setCodigoFase("B");
-        medidor.setTipoFatura("Anual");
+        medidor.setTipoMedidor(TipoMedidor.ELETROMECANICO);
+        medidor.setTipoLigacao(TipoLigacao.BIFASICO);
+        medidor.setClasseConsumo(ClasseConsumo.COMERCIAL_SERVICOS);
         medidor.setDias(15);
         medidor.setCliente(cliente);
 
         MedidorAtualizacaoDTO dto = new MedidorAtualizacaoDTO(
                 "MED-002",
                 "Cozinha",
-                "Digital",
-                "C",
-                "Mensal",
+                TipoMedidor.INTELIGENTE,
+                TipoLigacao.TRIFASICO,
+                ClasseConsumo.RESIDENCIAL,
                 30);
 
         mapper.atualizarEntidade(dto, medidor);
 
+        // Identificador e relacionamento devem ser preservados
         assertEquals(id, medidor.getId());
         assertSame(cliente, medidor.getCliente());
+
+        // Campos atualizados
         assertEquals("MED-002", medidor.getNumero());
         assertEquals("Cozinha", medidor.getLocalizacao());
-        assertEquals("Digital", medidor.getTipo());
-        assertEquals("C", medidor.getCodigoFase());
-        assertEquals("Mensal", medidor.getTipoFatura());
+        assertEquals(TipoMedidor.INTELIGENTE, medidor.getTipoMedidor());
+        assertEquals(TipoLigacao.TRIFASICO, medidor.getTipoLigacao());
+        assertEquals(ClasseConsumo.RESIDENCIAL, medidor.getClasseConsumo());
         assertEquals(30, medidor.getDias());
     }
 }
