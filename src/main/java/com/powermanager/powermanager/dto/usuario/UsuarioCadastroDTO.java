@@ -9,20 +9,21 @@ import java.util.UUID;
 
 public record UsuarioCadastroDTO(
 
-        @NotBlank(message = "O username é obrigatório.")
-        @Size(max = 100, message = "O username deve ter no máximo 100 caracteres.")
+        @NotBlank
+        @Size(max = 50)
         String username,
 
-        @NotBlank(message = "O nome é obrigatório")
-        @Size(max = 100, message = "O nome deve ter no máximo 100 caracteres.")
+        @NotBlank
+        @Size(max = 100)
         String nome,
 
-        @NotBlank(message = "A senha é obrigatória.")
-        @Size(min = 8, max = 72, message = "A senha deve possuir entre 8 e 72 caracteres." )
+        @NotBlank
+        @Size(min = 8, max = 72)
         String senha,
 
-        @NotNull(message = "O tipoMedidor de Usuário é obrigatório.")
+        @NotNull
         TipoUsuario tipoUsuario,
 
-        UUID clienteId) {
+        UUID clienteId
+) {
 }

@@ -1,7 +1,7 @@
 package com.powermanager.powermanager.services;
 
-import com.powermanager.powermanager.dto.fatura.FaturaCadastroDTO;
-import com.powermanager.powermanager.dto.fatura.FaturaCalculoDTO;
+import com.powermanager.powermanager.dto.fatura.FaturaGeracaoDTO;
+import com.powermanager.powermanager.dto.fatura.FaturaPagamentoDTO;
 import com.powermanager.powermanager.dto.fatura.FaturaResponseDTO;
 import com.powermanager.powermanager.dto.taxa.TaxaResponseDTO;
 import com.powermanager.powermanager.entity.Fatura;
@@ -39,7 +39,7 @@ public class FaturaService {
      * no momento da consulta.
      */
     @Transactional(readOnly = true)
-    public BigDecimal calcularFatura(FaturaCalculoDTO dto) {
+    public BigDecimal calcularFatura(FaturaPagamentoDTO dto) {
 
         if (dto == null) {
 
@@ -60,7 +60,7 @@ public class FaturaService {
      * da competência informada.
      */
     @Transactional
-    public FaturaResponseDTO gerarFatura(FaturaCadastroDTO dto) {
+    public FaturaResponseDTO gerarFatura(FaturaGeracaoDTO dto) {
 
         if (dto == null) {
 

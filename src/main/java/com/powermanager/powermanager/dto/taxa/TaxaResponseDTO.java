@@ -1,16 +1,23 @@
 package com.powermanager.powermanager.dto.taxa;
 
+import com.powermanager.powermanager.enums.ClasseConsumo;
+import com.powermanager.powermanager.enums.ModalidadeTarifaria;
+import com.powermanager.powermanager.enums.SubgrupoTarifario;
+
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.UUID;
 
-public record TaxaResponseDTO(UUID id,
-                              BigDecimal custoPorUnidade,
-                              BigDecimal aluguelMedidor,
-                              BigDecimal taxaServico,
-                              BigDecimal impostoServico,
-                              BigDecimal cess,
-                              BigDecimal taxaFixa,
-                              LocalDateTime inicioVigencia,
-                              LocalDateTime fimVigencia) {
+public record TaxaResponseDTO(
+
+        UUID id,
+        String distribuidora,
+        SubgrupoTarifario subgrupoTarifario,
+        ClasseConsumo classeConsumo,
+        ModalidadeTarifaria modalidadeTarifaria,
+        BigDecimal tarifaEnergia,
+        BigDecimal tarifaUsoDistribuicao,
+        LocalDate inicioVigencia,
+        LocalDate fimVigencia
+) {
 }
