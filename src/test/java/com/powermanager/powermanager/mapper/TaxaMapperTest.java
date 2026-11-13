@@ -1,13 +1,15 @@
 package com.powermanager.powermanager.mapper;
 
-import com.powermanager.powermanager.dto.taxa.TaxaAtualizacaoDTO;
 import com.powermanager.powermanager.dto.taxa.TaxaCadastroDTO;
 import com.powermanager.powermanager.dto.taxa.TaxaResponseDTO;
 import com.powermanager.powermanager.entity.Taxa;
+import com.powermanager.powermanager.enums.ClasseConsumo;
+import com.powermanager.powermanager.enums.ModalidadeTarifaria;
+import com.powermanager.powermanager.enums.SubgrupoTarifario;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -20,27 +22,50 @@ class TaxaMapperTest {
     void deveConverterCadastroDTOParaEntidade() {
 
         TaxaCadastroDTO dto = new TaxaCadastroDTO(
-                new BigDecimal("1.50"),
-                new BigDecimal("10.00"),
-                new BigDecimal("2.00"),
-                new BigDecimal("3.00"),
-                new BigDecimal("0.50"),
-                new BigDecimal("5.00"));
+                "Distribuidora Teste",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                new BigDecimal("0.350000"),
+                new BigDecimal("0.420000"),
+                LocalDate.of(2026, 1, 1),
+                LocalDate.of(2026, 12, 31));
 
         Taxa taxa = mapper.paraEntidade(dto);
 
         assertNotNull(taxa);
 
-        assertEquals(new BigDecimal("1.50"), taxa.getCustoPorUnidade());
-        assertEquals(new BigDecimal("10.00"), taxa.getAluguelMedidor());
-        assertEquals(new BigDecimal("2.00"), taxa.getTaxaServico());
-        assertEquals(new BigDecimal("3.00"), taxa.getImpostoServico());
-        assertEquals(new BigDecimal("0.50"), taxa.getCess());
-        assertEquals(new BigDecimal("5.00"), taxa.getTaxaFixa());
-
         assertNull(taxa.getId());
-        assertNull(taxa.getInicioVigencia());
-        assertNull(taxa.getFimVigencia());
+
+        assertEquals("Distribuidora Teste", taxa.getDistribuidora());
+
+        assertEquals(
+                SubgrupoTarifario.B1,
+                taxa.getSubgrupoTarifario());
+
+        assertEquals(
+                ClasseConsumo.RESIDENCIAL,
+                taxa.getClasseConsumo());
+
+        assertEquals(
+                ModalidadeTarifaria.CONVENCIONAL,
+                taxa.getModalidadeTarifaria());
+
+        assertEquals(
+                new BigDecimal("0.350000"),
+                taxa.getTarifaEnergia());
+
+        assertEquals(
+                new BigDecimal("0.420000"),
+                taxa.getTarifaUsoDistribuicao());
+
+        assertEquals(
+                LocalDate.of(2026, 1, 1),
+                taxa.getInicioVigencia());
+
+        assertEquals(
+                LocalDate.of(2026, 12, 31),
+                taxa.getFimVigencia());
     }
 
     @Test
@@ -48,76 +73,79 @@ class TaxaMapperTest {
 
         UUID id = UUID.randomUUID();
 
-        LocalDateTime inicio = LocalDateTime.of(2026, 1, 1, 0, 0);
-        LocalDateTime fim = LocalDateTime.of(2026, 12, 31, 23, 59);
-
         Taxa taxa = new Taxa();
+
         taxa.setId(id);
-        taxa.setCustoPorUnidade(new BigDecimal("1.50"));
-        taxa.setAluguelMedidor(new BigDecimal("10.00"));
-        taxa.setTaxaServico(new BigDecimal("2.00"));
-        taxa.setImpostoServico(new BigDecimal("3.00"));
-        taxa.setCess(new BigDecimal("0.50"));
-        taxa.setTaxaFixa(new BigDecimal("5.00"));
-        taxa.setInicioVigencia(inicio);
-        taxa.setFimVigencia(fim);
+        taxa.setDistribuidora("Distribuidora Teste");
+        taxa.setSubgrupoTarifario(SubgrupoTarifario.B1);
+        taxa.setClasseConsumo(ClasseConsumo.RESIDENCIAL);
+        taxa.setModalidadeTarifaria(ModalidadeTarifaria.CONVENCIONAL);
+        taxa.setTarifaEnergia(new BigDecimal("0.350000"));
+        taxa.setTarifaUsoDistribuicao(new BigDecimal("0.420000"));
+        taxa.setInicioVigencia(LocalDate.of(2026, 1, 1));
+        taxa.setFimVigencia(LocalDate.of(2026, 12, 31));
 
         TaxaResponseDTO dto = mapper.paraResponseDTO(taxa);
 
         assertNotNull(dto);
 
         assertEquals(id, dto.id());
-        assertEquals(new BigDecimal("1.50"), dto.custoPorUnidade());
-        assertEquals(new BigDecimal("10.00"), dto.aluguelMedidor());
-        assertEquals(new BigDecimal("2.00"), dto.taxaServico());
-        assertEquals(new BigDecimal("3.00"), dto.impostoServico());
-        assertEquals(new BigDecimal("0.50"), dto.cess());
-        assertEquals(new BigDecimal("5.00"), dto.taxaFixa());
 
-        assertEquals(inicio, dto.inicioVigencia());
-        assertEquals(fim, dto.fimVigencia());
+        assertEquals("Distribuidora Teste", dto.distribuidora());
+
+        assertEquals(
+                SubgrupoTarifario.B1,
+                dto.subgrupoTarifario());
+
+        assertEquals(
+                ClasseConsumo.RESIDENCIAL,
+                dto.classeConsumo());
+
+        assertEquals(
+                ModalidadeTarifaria.CONVENCIONAL,
+                dto.modalidadeTarifaria());
+
+        assertEquals(
+                new BigDecimal("0.350000"),
+                dto.tarifaEnergia());
+
+        assertEquals(
+                new BigDecimal("0.420000"),
+                dto.tarifaUsoDistribuicao());
+
+        assertEquals(
+                LocalDate.of(2026, 1, 1),
+                dto.inicioVigencia());
+
+        assertEquals(
+                LocalDate.of(2026, 12, 31),
+                dto.fimVigencia());
     }
 
     @Test
-    void deveAtualizarEntidadePreservandoIdEVigencia() {
+    void devePreservarFimVigenciaNulo() {
 
-        UUID id = UUID.randomUUID();
+        TaxaCadastroDTO dto = new TaxaCadastroDTO(
+                "Distribuidora Teste",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                new BigDecimal("0.350000"),
+                new BigDecimal("0.420000"),
+                LocalDate.of(2026, 1, 1),
+                null
+        );
 
-        LocalDateTime inicio = LocalDateTime.of(2026, 1, 1, 0, 0);
-        LocalDateTime fim = LocalDateTime.of(2026, 12, 31, 23, 59);
+        Taxa taxa = mapper.paraEntidade(dto);
 
-        Taxa taxa = new Taxa();
-        taxa.setId(id);
-        taxa.setCustoPorUnidade(new BigDecimal("1.00"));
-        taxa.setAluguelMedidor(new BigDecimal("8.00"));
-        taxa.setTaxaServico(new BigDecimal("1.00"));
-        taxa.setImpostoServico(new BigDecimal("2.00"));
-        taxa.setCess(new BigDecimal("0.25"));
-        taxa.setTaxaFixa(new BigDecimal("4.00"));
-        taxa.setInicioVigencia(inicio);
-        taxa.setFimVigencia(fim);
+        assertNotNull(taxa);
+        assertNull(taxa.getFimVigencia());
+    }
 
-        TaxaAtualizacaoDTO dto = new TaxaAtualizacaoDTO(
-                new BigDecimal("2.50"),
-                new BigDecimal("12.00"),
-                new BigDecimal("3.00"),
-                new BigDecimal("4.00"),
-                new BigDecimal("0.75"),
-                new BigDecimal("6.00"));
+    @Test
+    void deveRetornarNullQuandoOrigemForNull() {
 
-        mapper.atualizarEntidade(dto, taxa);
-
-        assertEquals(id, taxa.getId());
-
-        // Vigência não deve ser alterada pelo mapper.
-        assertEquals(inicio, taxa.getInicioVigencia());
-        assertEquals(fim, taxa.getFimVigencia());
-
-        assertEquals(new BigDecimal("2.50"), taxa.getCustoPorUnidade());
-        assertEquals(new BigDecimal("12.00"), taxa.getAluguelMedidor());
-        assertEquals(new BigDecimal("3.00"), taxa.getTaxaServico());
-        assertEquals(new BigDecimal("4.00"), taxa.getImpostoServico());
-        assertEquals(new BigDecimal("0.75"), taxa.getCess());
-        assertEquals(new BigDecimal("6.00"), taxa.getTaxaFixa());
+        assertNull(mapper.paraEntidade(null));
+        assertNull(mapper.paraResponseDTO(null));
     }
 }

@@ -12,13 +12,22 @@ import org.mapstruct.MappingTarget;
 public interface MedidorMapper {
 
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "cliente", ignore = true)
+    @Mapping(target = "unidadeConsumidora", ignore = true)
+    @Mapping(target = "ativo", ignore = true)
+    @Mapping(target = "dataInstalacao", ignore = true)
+    @Mapping(target = "dataRetirada", ignore = true)
     Medidor paraEntidade(MedidorCadastroDTO dto);
 
-    @Mapping(target = "clienteId", source = "cliente.id")
+    @Mapping(target = "unidadeConsumidoraId", source = "unidadeConsumidora.id")
     MedidorResponseDTO paraResponseDTO(Medidor medidor);
 
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "cliente", ignore = true)
-    void atualizarEntidade(MedidorAtualizacaoDTO dto, @MappingTarget Medidor medidor);
+    @Mapping(target = "numero", ignore = true)
+    @Mapping(target = "unidadeConsumidora", ignore = true)
+    @Mapping(target = "ativo", ignore = true)
+    @Mapping(target = "dataInstalacao", ignore = true)
+    @Mapping(target = "dataRetirada", ignore = true)
+    void atualizarEntidade(
+            MedidorAtualizacaoDTO dto,
+            @MappingTarget Medidor medidor);
 }

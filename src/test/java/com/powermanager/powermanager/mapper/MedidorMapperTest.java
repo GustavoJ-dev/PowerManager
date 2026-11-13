@@ -3,13 +3,13 @@ package com.powermanager.powermanager.mapper;
 import com.powermanager.powermanager.dto.medidor.MedidorAtualizacaoDTO;
 import com.powermanager.powermanager.dto.medidor.MedidorCadastroDTO;
 import com.powermanager.powermanager.dto.medidor.MedidorResponseDTO;
-import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.entity.Medidor;
-import com.powermanager.powermanager.enums.ClasseConsumo;
+import com.powermanager.powermanager.entity.UnidadeConsumidora;
 import com.powermanager.powermanager.enums.TipoLigacao;
 import com.powermanager.powermanager.enums.TipoMedidor;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -20,100 +20,111 @@ class MedidorMapperTest {
 
     @Test
     void deveConverterCadastroDTOParaEntidade() {
-        UUID clienteId = UUID.randomUUID();
 
         MedidorCadastroDTO dto = new MedidorCadastroDTO(
                 "MED-001",
-                "Sala",
                 TipoMedidor.ELETRONICO,
                 TipoLigacao.MONOFASICO,
-                ClasseConsumo.RESIDENCIAL,
-                30,
-                clienteId);
+                LocalDate.of(2026, 1, 10),
+                UUID.randomUUID());
 
         Medidor medidor = mapper.paraEntidade(dto);
 
         assertNotNull(medidor);
+
+        assertNull(medidor.getId());
+        assertNull(medidor.getUnidadeConsumidora());
+        assertNull(medidor.getDataInstalacao());
+        assertNull(medidor.getDataRetirada());
+
+        assertTrue(medidor.getAtivo());
+
         assertEquals("MED-001", medidor.getNumero());
-        assertEquals("Sala", medidor.getLocalizacao());
         assertEquals(TipoMedidor.ELETRONICO, medidor.getTipoMedidor());
         assertEquals(TipoLigacao.MONOFASICO, medidor.getTipoLigacao());
-        assertEquals(ClasseConsumo.RESIDENCIAL, medidor.getClasseConsumo());
-        assertEquals(30, medidor.getDias());
-
-        // Campos que devem ser tratados pelo service
-        assertNull(medidor.getId());
-        assertNull(medidor.getCliente());
     }
 
     @Test
     void deveConverterEntidadeParaResponseDTO() {
-        UUID id = UUID.randomUUID();
-        UUID clienteId = UUID.randomUUID();
 
-        Cliente cliente = new Cliente();
-        cliente.setId(clienteId);
+        UUID medidorId = UUID.randomUUID();
+        UUID unidadeId = UUID.randomUUID();
+
+        UnidadeConsumidora unidade = new UnidadeConsumidora();
+        unidade.setId(unidadeId);
 
         Medidor medidor = new Medidor();
-        medidor.setId(id);
+        medidor.setId(medidorId);
         medidor.setNumero("MED-001");
-        medidor.setLocalizacao("Sala");
         medidor.setTipoMedidor(TipoMedidor.ELETRONICO);
         medidor.setTipoLigacao(TipoLigacao.MONOFASICO);
-        medidor.setClasseConsumo(ClasseConsumo.RESIDENCIAL);
-        medidor.setDias(30);
-        medidor.setCliente(cliente);
+        medidor.setAtivo(true);
+        medidor.setDataInstalacao(LocalDate.of(2026, 1, 10));
+        medidor.setUnidadeConsumidora(unidade);
 
         MedidorResponseDTO dto = mapper.paraResponseDTO(medidor);
 
         assertNotNull(dto);
-        assertEquals(id, dto.id());
+
+        assertEquals(medidorId, dto.id());
+        assertEquals(unidadeId, dto.unidadeConsumidoraId());
+
         assertEquals("MED-001", dto.numero());
-        assertEquals("Sala", dto.localizacao());
         assertEquals(TipoMedidor.ELETRONICO, dto.tipoMedidor());
         assertEquals(TipoLigacao.MONOFASICO, dto.tipoLigacao());
-        assertEquals(ClasseConsumo.RESIDENCIAL, dto.classeConsumo());
-        assertEquals(30, dto.dias());
-        assertEquals(clienteId, dto.clienteId());
+        assertTrue(dto.ativo());
+        assertEquals(LocalDate.of(2026, 1, 10), dto.dataInstalacao());
+        assertNull(dto.dataRetirada());
     }
 
     @Test
-    void deveAtualizarCamposSemAlterarIdOuCliente() {
-        UUID id = UUID.randomUUID();
+    void deveAtualizarSomenteTipoMedidorETipoLigacao() {
 
-        Cliente cliente = new Cliente();
-        cliente.setId(UUID.randomUUID());
+        UUID medidorId = UUID.randomUUID();
+        UUID unidadeId = UUID.randomUUID();
+
+        UnidadeConsumidora unidade = new UnidadeConsumidora();
+        unidade.setId(unidadeId);
 
         Medidor medidor = new Medidor();
-        medidor.setId(id);
-        medidor.setNumero("MED-ANTIGO");
-        medidor.setLocalizacao("Antiga");
+        medidor.setId(medidorId);
+        medidor.setNumero("MED-001");
         medidor.setTipoMedidor(TipoMedidor.ELETROMECANICO);
         medidor.setTipoLigacao(TipoLigacao.BIFASICO);
-        medidor.setClasseConsumo(ClasseConsumo.COMERCIAL_SERVICOS);
-        medidor.setDias(15);
-        medidor.setCliente(cliente);
+        medidor.setAtivo(false);
+        medidor.setDataInstalacao(LocalDate.of(2025, 1, 10));
+        medidor.setDataRetirada(LocalDate.of(2025, 12, 10));
+        medidor.setUnidadeConsumidora(unidade);
 
         MedidorAtualizacaoDTO dto = new MedidorAtualizacaoDTO(
-                "MED-002",
-                "Cozinha",
                 TipoMedidor.INTELIGENTE,
-                TipoLigacao.TRIFASICO,
-                ClasseConsumo.RESIDENCIAL,
-                30);
+                TipoLigacao.TRIFASICO);
 
         mapper.atualizarEntidade(dto, medidor);
 
-        // Identificador e relacionamento devem ser preservados
-        assertEquals(id, medidor.getId());
-        assertSame(cliente, medidor.getCliente());
+        assertEquals(medidorId, medidor.getId());
+        assertEquals("MED-001", medidor.getNumero());
 
-        // Campos atualizados
-        assertEquals("MED-002", medidor.getNumero());
-        assertEquals("Cozinha", medidor.getLocalizacao());
+        assertSame(unidade, medidor.getUnidadeConsumidora());
+
+        assertFalse(medidor.getAtivo());
+
+        assertEquals(
+                LocalDate.of(2025, 1, 10),
+                medidor.getDataInstalacao());
+
+        assertEquals(
+                LocalDate.of(2025, 12, 10),
+                medidor.getDataRetirada());
+
         assertEquals(TipoMedidor.INTELIGENTE, medidor.getTipoMedidor());
         assertEquals(TipoLigacao.TRIFASICO, medidor.getTipoLigacao());
-        assertEquals(ClasseConsumo.RESIDENCIAL, medidor.getClasseConsumo());
-        assertEquals(30, medidor.getDias());
+    }
+
+    @Test
+    void deveRetornarNullQuandoOrigemForNull() {
+
+        assertNull(mapper.paraEntidade(null));
+        assertNull(mapper.paraResponseDTO(null));
     }
 }

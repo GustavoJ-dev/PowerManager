@@ -18,6 +18,7 @@ class UsuarioMapperTest {
 
     @Test
     void deveConverterCadastroDTOParaEntidadeSemCopiarSenhaOuCliente() {
+
         UUID clienteId = UUID.randomUUID();
 
         UsuarioCadastroDTO dto = new UsuarioCadastroDTO(
@@ -35,7 +36,6 @@ class UsuarioMapperTest {
         assertEquals("Usuário Teste", usuario.getNome());
         assertEquals(TipoUsuario.CLIENTE, usuario.getTipoUsuario());
 
-        // Campos tratados pelo service.
         assertNull(usuario.getId());
         assertNull(usuario.getPasswordHash());
         assertNull(usuario.getCliente());
@@ -43,6 +43,7 @@ class UsuarioMapperTest {
 
     @Test
     void deveConverterEntidadeParaResponseDTOSemExporSenha() {
+
         UUID id = UUID.randomUUID();
         UUID clienteId = UUID.randomUUID();
 
@@ -85,18 +86,28 @@ class UsuarioMapperTest {
         usuario.setTipoUsuario(TipoUsuario.ADMINISTRADOR);
         usuario.setCliente(cliente);
 
-        UsuarioAtualizacaoDTO dto = new UsuarioAtualizacaoDTO("usuario_novo", "Nome Novo");
+        UsuarioAtualizacaoDTO dto = new UsuarioAtualizacaoDTO(
+                "usuario_novo",
+                "Nome Novo");
 
         mapper.atualizarEntidade(dto, usuario);
 
-        // Campos protegidos.
+        // Campos protegidos
         assertEquals(id, usuario.getId());
         assertEquals(senha, usuario.getPasswordHash());
         assertEquals(TipoUsuario.ADMINISTRADOR, usuario.getTipoUsuario());
         assertSame(cliente, usuario.getCliente());
 
-        // Campos atualizados.
+        // Campos atualizados
         assertEquals("usuario_novo", usuario.getUsername());
         assertEquals("Nome Novo", usuario.getNome());
+    }
+
+    @Test
+    void deveRetornarNullQuandoEntidadeForNull() {
+
+        UsuarioResponseDTO dto = mapper.paraResponseDTO(null);
+
+        assertNull(dto);
     }
 }
