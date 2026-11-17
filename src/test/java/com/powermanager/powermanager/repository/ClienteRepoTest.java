@@ -1,10 +1,10 @@
 package com.powermanager.powermanager.repository;
 
 import com.powermanager.powermanager.entity.Cliente;
-import com.powermanager.powermanager.entity.Medidor;
+import com.powermanager.powermanager.entity.UnidadeConsumidora;
 import com.powermanager.powermanager.enums.ClasseConsumo;
-import com.powermanager.powermanager.enums.TipoLigacao;
-import com.powermanager.powermanager.enums.TipoMedidor;
+import com.powermanager.powermanager.enums.ModalidadeTarifaria;
+import com.powermanager.powermanager.enums.SubgrupoTarifario;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,10 +15,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
-public class ClienteRepoTest {
+class ClienteRepoTest {
 
     @Autowired
     private ClienteRepo clienteRepo;
@@ -26,39 +26,37 @@ public class ClienteRepoTest {
     @Autowired
     private EntityManager entityManager;
 
-    private Cliente criarCliente(){
+    private Cliente criarCliente(String nome, String email) {
 
         Cliente cliente = new Cliente();
-        cliente.setNome("João da Silva");
-        cliente.setEndereco("Rua das Flores, 123");
-        cliente.setCidade("Salvador");
-        cliente.setEstado("Bahia");
-        cliente.setEmail("joao@email.com");
+        cliente.setNome(nome);
+        cliente.setEmail(email);
         cliente.setTelefone("71999999999");
-
         return cliente;
     }
 
-    private Medidor criarMedidor(Cliente cliente, String numero){
+    private UnidadeConsumidora criarUnidadeConsumidora(Cliente cliente, String codigo) {
 
-        Medidor medidor = new Medidor();
-
-        medidor.setNumero(numero);
-        medidor.setCliente(cliente);
-        medidor.setLocalizacao("Residência");
-        medidor.setTipoMedidor(TipoMedidor.ELETRONICO);
-        medidor.setTipoLigacao(TipoLigacao.MONOFASICO);
-        medidor.setClasseConsumo(ClasseConsumo.RESIDENCIAL);
-        medidor.setDias(30);
-
-        return medidor;
+        UnidadeConsumidora unidade = new UnidadeConsumidora();
+        unidade.setCodigo(codigo);
+        unidade.setEndereco("Rua das Flores, 123");
+        unidade.setCidade("Salvador");
+        unidade.setEstado("BA");
+        unidade.setCep("40000-000");
+        unidade.setDistribuidora("Distribuidora Exemplo");
+        unidade.setClasseConsumo(ClasseConsumo.RESIDENCIAL);
+        unidade.setSubgrupoTarifario(SubgrupoTarifario.B1);
+        unidade.setModalidadeTarifaria(ModalidadeTarifaria.CONVENCIONAL);
+        unidade.setAtiva(true);
+        unidade.setCliente(cliente);
+        return unidade;
     }
 
     @Test
     @DisplayName("Deve persistir um cliente e gerar seu UUID")
-    void devePersistirCliente(){
+    void devePersistirClienteEGerarUUID() {
 
-        Cliente cliente = criarCliente();
+        Cliente cliente = criarCliente("João da Silva", "joao@email.com");
 
         Cliente salvo = clienteRepo.saveAndFlush(cliente);
 
@@ -66,100 +64,75 @@ public class ClienteRepoTest {
 
         entityManager.clear();
 
-        Optional<Cliente> resultado = clienteRepo.findById(salvo.getId());
-
-        assertThat(resultado).isPresent();
-
-        Cliente encontrado = resultado.orElseThrow();
-
+        Cliente encontrado = clienteRepo.findById(salvo.getId()).orElseThrow();
         assertThat(encontrado.getNome()).isEqualTo("João da Silva");
-        assertThat(encontrado.getEndereco()).isEqualTo("Rua das Flores, 123");
-        assertThat(encontrado.getCidade()).isEqualTo("Salvador");
-        assertThat(encontrado.getEstado()).isEqualTo("Bahia");
         assertThat(encontrado.getEmail()).isEqualTo("joao@email.com");
         assertThat(encontrado.getTelefone()).isEqualTo("71999999999");
     }
 
     @Test
-    @DisplayName("Deve Buscar Um Cliente pelo ID")
-    void deveBuscarClientePorId(){
+    @DisplayName("Deve buscar um cliente pelo ID")
+    void deveBuscarClientePorId() {
 
-        Cliente salvo = clienteRepo.saveAndFlush(criarCliente());
+        Cliente salvo = clienteRepo.saveAndFlush(criarCliente("João da Silva", "joao@email.com"));
 
         entityManager.clear();
 
         Optional<Cliente> resultado = clienteRepo.findById(salvo.getId());
 
         assertThat(resultado).isPresent();
-        assertThat(resultado.get().getNome()).isEqualTo("João da Silva");
+        assertThat(resultado.orElseThrow().getNome()).isEqualTo("João da Silva");
     }
 
     @Test
-    @DisplayName("Não deve encontrar Cliente com iD inexistente")
-    void naoDeveEncontrarClientePorIdInexistente(){
+    @DisplayName("Não deve encontrar cliente com ID inexistente")
+    void naoDeveEncontrarClientePorIdInexistente() {
 
-        UUID idInexistente = UUID.randomUUID();
-
-        Optional<Cliente> resultado = clienteRepo.findById(idInexistente);
-
-        assertThat(resultado).isEmpty();
+        assertThat(clienteRepo.findById(UUID.randomUUID())).isEmpty();
     }
 
     @Test
-    @DisplayName("Deve Listar Clientes persistidos")
-    void deveListarClientesPersistidos(){
+    @DisplayName("Deve listar os clientes persistidos")
+    void deveListarClientesPersistidos() {
 
-        Cliente primeiro = criarCliente();
-        Cliente segundo = criarCliente();
-
-        segundo.setEmail("maria@email.com");
-        segundo.setNome("Maria Oliveira");
+        Cliente primeiro = criarCliente("João da Silva", "joao@email.com");
+        Cliente segundo = criarCliente("Maria Oliveira", "maria@email.com");
 
         clienteRepo.saveAllAndFlush(List.of(primeiro, segundo));
-
         entityManager.clear();
 
-        List<Cliente> clientes = clienteRepo.findAll();
-
-        assertThat(clientes)
+        assertThat(clienteRepo.findAll())
                 .hasSize(2)
                 .extracting(Cliente::getNome)
-                .containsExactly("João da Silva", "Maria Oliveira");
-
+                .containsExactlyInAnyOrder("João da Silva", "Maria Oliveira");
     }
 
     @Test
-    @DisplayName("Deve verificar a existencia de um cliente")
-    void deveVerificarExistenciaCliente(){
+    @DisplayName("Deve verificar a existência de um cliente pelo ID")
+    void deveVerificarExistenciaCliente() {
 
-        Cliente salvo = clienteRepo.saveAndFlush(criarCliente());
+        Cliente salvo = clienteRepo.saveAndFlush(criarCliente("João da Silva", "joao@email.com"));
 
         assertThat(clienteRepo.existsById(salvo.getId())).isTrue();
         assertThat(clienteRepo.existsById(UUID.randomUUID())).isFalse();
     }
 
     @Test
-    @DisplayName("Deve contar Clientes persistidos")
-    void deveContarClientes(){
+    @DisplayName("Deve contar os clientes persistidos")
+    void deveContarClientesPersistidos() {
 
-       Cliente primeiro = criarCliente();
+        clienteRepo.saveAllAndFlush(List.of(
+                criarCliente("João da Silva", "joao@email.com"),
+                criarCliente("Maria Oliveira", "maria@email.com")));
 
-       Cliente segundo = criarCliente();
-       segundo.setEmail("maria@email.com");
-
-       clienteRepo.saveAllAndFlush(List.of(primeiro, segundo));
-
-       assertThat(clienteRepo.count()).isEqualTo(2);
-
-
+        assertThat(clienteRepo.count()).isEqualTo(2);
     }
 
     @Test
-    @DisplayName("Deve Excluir cliente pelo ID")
-    void deveExcluirPeloId(){
+    @DisplayName("Deve excluir um cliente pelo ID")
+    void deveExcluirClientePeloId() {
 
-        Cliente salvo = clienteRepo.saveAndFlush(criarCliente());
-
+        Cliente salvo = clienteRepo.saveAndFlush(criarCliente("João da Silva", "joao@email.com"));
         UUID id = salvo.getId();
 
         clienteRepo.deleteById(id);
@@ -170,25 +143,21 @@ public class ClienteRepoTest {
     }
 
     @Test
-    @DisplayName("Deve permitir que um cliente possua múltiplos medidores")
-    void devePermitirQueUmClienteTenhaMultiplosMedidores(){
+    @DisplayName("Deve permitir que um cliente possua múltiplas unidades consumidoras")
+    void devePermitirMultiplasUnidadesConsumidoras() {
 
-        Cliente cliente = clienteRepo.saveAndFlush(criarCliente());
+        Cliente cliente = clienteRepo.saveAndFlush(criarCliente("João da Silva", "joao@email.com"));
 
-        Medidor primeiro = criarMedidor(cliente, "MED-001");
-        Medidor segundo = criarMedidor(cliente, "MED-002");
-
-        entityManager.persist(primeiro);
-        entityManager.persist(segundo);
-
+        entityManager.persist(criarUnidadeConsumidora(cliente, "UC-001"));
+        entityManager.persist(criarUnidadeConsumidora(cliente, "UC-002"));
         entityManager.flush();
         entityManager.clear();
 
         Cliente encontrado = clienteRepo.findById(cliente.getId()).orElseThrow();
 
-        assertThat(encontrado.getMedidores())
+        assertThat(encontrado.getUnidadeConsumidoras())
                 .hasSize(2)
-                .extracting(Medidor::getNumero)
-                .containsExactly("MED-001", "MED-002");
+                .extracting(UnidadeConsumidora::getCodigo)
+                .containsExactlyInAnyOrder("UC-001", "UC-002");
     }
 }

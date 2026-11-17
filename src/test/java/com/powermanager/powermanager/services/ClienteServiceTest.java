@@ -1,9 +1,11 @@
+
 package com.powermanager.powermanager.services;
 
+import com.powermanager.powermanager.dto.cliente.ClienteAtualizacaoDTO;
 import com.powermanager.powermanager.dto.cliente.ClienteCadastroDTO;
 import com.powermanager.powermanager.dto.cliente.ClienteResponseDTO;
 import com.powermanager.powermanager.entity.Cliente;
-import com.powermanager.powermanager.exception.ClienteNotFoundException;
+import com.powermanager.powermanager.exception.cliente.ClienteNotFoundException;
 import com.powermanager.powermanager.mapper.ClienteMapper;
 import com.powermanager.powermanager.repository.ClienteRepo;
 import org.junit.jupiter.api.Test;
@@ -20,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class ClienteServiceTest {
+class ClienteServiceTest {
 
     @Mock
     private ClienteRepo clienteRepo;
@@ -31,107 +33,99 @@ public class ClienteServiceTest {
     @InjectMocks
     private ClienteService clienteService;
 
-
-    //DTO convertido para entidade, entidade salva e resposta é convertida em DTO
     @Test
-    void deveCadastrarCliente(){
+    void deveCadastrarCliente() {
 
         ClienteCadastroDTO dto = new ClienteCadastroDTO(
                 "João Silva",
-                "Rua Central, 100",
-                "Salvador",
-                "Bahia",
-                "João@gmail.com",
-                "71999999999");
+                "joao@email.com",
+                "77999999999"
+        );
 
-        Cliente cliente = new Cliente();
+        Cliente cliente = mock(Cliente.class);
 
-        Cliente clienteSalvo = new Cliente();
-
-        ClienteResponseDTO resposta = new ClienteResponseDTO(
+        ClienteResponseDTO response = new ClienteResponseDTO(
                 UUID.randomUUID(),
                 "João Silva",
-                "Rua Central, 100",
-                "Salvador",
-                "Bahia",
-                "João@gmail.com",
-                "71999999999" );
+                "joao@email.com",
+                "77999999999"
+        );
 
         when(clienteMapper.paraEntidade(dto)).thenReturn(cliente);
-        when(clienteRepo.save(cliente)).thenReturn(clienteSalvo);
-        when(clienteMapper.paraResponseDTO(clienteSalvo)).thenReturn(resposta);
+        when(clienteRepo.save(cliente)).thenReturn(cliente);
+        when(clienteMapper.paraResponseDTO(cliente)).thenReturn(response);
 
         ClienteResponseDTO resultado = clienteService.cadastrarCliente(dto);
 
-        assertEquals(resposta, resultado);
+        assertNotNull(resultado);
+        assertEquals(response, resultado);
 
         verify(clienteMapper).paraEntidade(dto);
         verify(clienteRepo).save(cliente);
-        verify(clienteMapper).paraResponseDTO(clienteSalvo);
+        verify(clienteMapper).paraResponseDTO(cliente);
     }
 
-    //cada entidade é convertida para dto de resposta
     @Test
-    void deveListarClientes(){
+    void deveListarClientes() {
 
-        Cliente cliente1 = new Cliente();
-        Cliente cliente2 = new Cliente();
+        Cliente cliente1 = mock(Cliente.class);
+        Cliente cliente2 = mock(Cliente.class);
 
-        List<Cliente> clientes = List.of(cliente1, cliente2);
+        ClienteResponseDTO response1 = new ClienteResponseDTO(
+                UUID.randomUUID(), "João", "joao@email.com", "77999999999"
+        );
 
-        ClienteResponseDTO resposta1 = new ClienteResponseDTO(
-                UUID.randomUUID(),
-                "Jõao",
-                "RUA A",
-                "Salvador",
-                "BA",
-                "joao@email.com",
-                "71111111111");
+        ClienteResponseDTO response2 = new ClienteResponseDTO(
+                UUID.randomUUID(), "Maria", "maria@email.com", "77988888888"
+        );
 
-        ClienteResponseDTO resposta2 = new ClienteResponseDTO(
-                UUID.randomUUID(),
-                "Maria",
-                "Rua B",
-                "Salvador",
-                "BA",
-                "maria@email.com",
-                "72222222222");
-
-        when(clienteRepo.findAll()).thenReturn(clientes);
-        when(clienteMapper.paraResponseDTO(cliente1)).thenReturn(resposta1);
-        when(clienteMapper.paraResponseDTO(cliente2)).thenReturn(resposta2);
+        when(clienteRepo.findAll()).thenReturn(List.of(cliente1, cliente2));
+        when(clienteMapper.paraResponseDTO(cliente1)).thenReturn(response1);
+        when(clienteMapper.paraResponseDTO(cliente2)).thenReturn(response2);
 
         List<ClienteResponseDTO> resultado = clienteService.listarClientes();
 
-        assertEquals(List.of(resposta1, resposta2), resultado);
+        assertEquals(2, resultado.size());
+        assertEquals(response1, resultado.get(0));
+        assertEquals(response2, resultado.get(1));
 
         verify(clienteRepo).findAll();
         verify(clienteMapper).paraResponseDTO(cliente1);
         verify(clienteMapper).paraResponseDTO(cliente2);
     }
 
-    //cliente encontrado é convertido para DTO
     @Test
-    void deveBuscarClientePorId(){
+    void deveRetornarListaVaziaQuandoNaoExistiremClientes() {
+
+        when(clienteRepo.findAll()).thenReturn(List.of());
+
+        List<ClienteResponseDTO> resultado = clienteService.listarClientes();
+
+        assertNotNull(resultado);
+        assertTrue(resultado.isEmpty());
+
+        verify(clienteRepo).findAll();
+        verifyNoInteractions(clienteMapper);
+    }
+
+    @Test
+    void deveBuscarClientePorId() {
 
         UUID id = UUID.randomUUID();
-        Cliente cliente = new Cliente();
 
-        ClienteResponseDTO resposta = new ClienteResponseDTO(
-                id,
-                "João",
-                "Rua A",
-                "Salvador",
-                "BA",
-                "joao@email.com",
-                "71111111111");
+        Cliente cliente = mock(Cliente.class);
+
+        ClienteResponseDTO response = new ClienteResponseDTO(
+                id, "João Silva", "joao@email.com", "77999999999"
+        );
 
         when(clienteRepo.findById(id)).thenReturn(Optional.of(cliente));
-        when(clienteMapper.paraResponseDTO(cliente)).thenReturn(resposta);
+        when(clienteMapper.paraResponseDTO(cliente)).thenReturn(response);
 
         ClienteResponseDTO resultado = clienteService.buscarPorId(id);
 
-        assertEquals(resposta, resultado);
+        assertNotNull(resultado);
+        assertEquals(response, resultado);
 
         verify(clienteRepo).findById(id);
         verify(clienteMapper).paraResponseDTO(cliente);
@@ -146,41 +140,69 @@ public class ClienteServiceTest {
 
         assertThrows(
                 ClienteNotFoundException.class,
-                () -> clienteService.buscarPorId(id));
+                () -> clienteService.buscarPorId(id)
+        );
 
         verify(clienteRepo).findById(id);
         verifyNoInteractions(clienteMapper);
     }
 
     @Test
-    void deveExcluirCliente() {
+    void deveAtualizarCliente() {
 
         UUID id = UUID.randomUUID();
-        Cliente cliente = new Cliente();
+
+        ClienteAtualizacaoDTO dto = new ClienteAtualizacaoDTO(
+                "João Atualizado",
+                "joao.atualizado@email.com",
+                "77999999999"
+        );
+
+        Cliente cliente = mock(Cliente.class);
+
+        ClienteResponseDTO response = new ClienteResponseDTO(
+                id,
+                "João Atualizado",
+                "joao.atualizado@email.com",
+                "77999999999"
+        );
 
         when(clienteRepo.findById(id)).thenReturn(Optional.of(cliente));
+        when(clienteRepo.save(cliente)).thenReturn(cliente);
+        when(clienteMapper.paraResponseDTO(cliente)).thenReturn(response);
 
-        clienteService.excluir(id);
+        ClienteResponseDTO resultado = clienteService.atualizarCliente(id, dto);
+
+        assertNotNull(resultado);
+        assertEquals(response, resultado);
 
         verify(clienteRepo).findById(id);
-        verify(clienteRepo).deleteById(id);
-        verifyNoInteractions(clienteMapper);
+        verify(clienteMapper).atualizarEntidade(dto, cliente);
+        verify(clienteRepo).save(cliente);
+        verify(clienteMapper).paraResponseDTO(cliente);
     }
 
     @Test
-    void deveLancarExcecaoAoExcluirClienteInexistente() {
+    void deveLancarExcecaoAoAtualizarClienteInexistente() {
 
         UUID id = UUID.randomUUID();
 
-        when(clienteRepo.findById(id))
-                .thenReturn(Optional.empty());
+        ClienteAtualizacaoDTO dto = new ClienteAtualizacaoDTO(
+                "João",
+                "joao@email.com",
+                "77999999999"
+        );
+
+        when(clienteRepo.findById(id)).thenReturn(Optional.empty());
 
         assertThrows(
                 ClienteNotFoundException.class,
-                () -> clienteService.excluir(id));
+                () -> clienteService.atualizarCliente(id, dto)
+        );
 
         verify(clienteRepo).findById(id);
-        verify(clienteRepo, never()).deleteById(id);
         verifyNoInteractions(clienteMapper);
+        verify(clienteRepo, never()).save(any(Cliente.class));
     }
 }
+

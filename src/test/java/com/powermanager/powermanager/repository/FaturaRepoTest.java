@@ -2,17 +2,11 @@ package com.powermanager.powermanager.repository;
 
 import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.entity.Fatura;
-import com.powermanager.powermanager.entity.Medidor;
-import com.powermanager.powermanager.enums.ClasseConsumo;
-import com.powermanager.powermanager.enums.StatusFatura;
-import com.powermanager.powermanager.enums.TipoLigacao;
-import com.powermanager.powermanager.enums.TipoMedidor;
-
+import com.powermanager.powermanager.entity.UnidadeConsumidora;
+import com.powermanager.powermanager.enums.*;
 import jakarta.persistence.EntityManager;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -33,60 +27,66 @@ class FaturaRepoTest {
     private FaturaRepo faturaRepo;
 
     @Autowired
-    private MedidorRepo medidorRepo;
+    private ClienteRepo clienteRepo;
 
     @Autowired
-    private ClienteRepo clienteRepo;
+    private UnidadeConsumidoraRepo unidadeConsumidoraRepo;
 
     @Autowired
     private EntityManager entityManager;
 
-    private Cliente criarCliente(String email) {
+    private UnidadeConsumidora criarUnidadeConsumidora(String email, String codigo) {
 
         Cliente cliente = new Cliente();
-
-        cliente.setNome("João da Silva");
-        cliente.setEndereco("Rua das Flores, 123");
-        cliente.setCidade("Salvador");
-        cliente.setEstado("Bahia");
+        cliente.setNome("Cliente Teste");
         cliente.setEmail(email);
         cliente.setTelefone("71999999999");
 
-        return clienteRepo.saveAndFlush(cliente);
+        cliente = clienteRepo.saveAndFlush(cliente);
+
+        UnidadeConsumidora unidade = new UnidadeConsumidora();
+        unidade.setCodigo(codigo);
+        unidade.setEndereco("Rua das Flores, 123");
+        unidade.setCidade("Salvador");
+        unidade.setEstado("BA");
+        unidade.setCep("40000000");
+        unidade.setDistribuidora("Neoenergia Coelba");
+        unidade.setClasseConsumo(ClasseConsumo.RESIDENCIAL);
+        unidade.setSubgrupoTarifario(SubgrupoTarifario.B1);
+        unidade.setModalidadeTarifaria(ModalidadeTarifaria.CONVENCIONAL);
+        unidade.setAtiva(true);
+        unidade.setCliente(cliente);
+
+        return unidadeConsumidoraRepo.saveAndFlush(unidade);
     }
 
-    private Medidor criarMedidor(String numero, String email) {
-
-        Medidor medidor = new Medidor();
-
-        medidor.setNumero(numero);
-        medidor.setLocalizacao("Residencial");
-        medidor.setTipoMedidor(TipoMedidor.ELETRONICO);
-        medidor.setTipoLigacao(TipoLigacao.BIFASICO);
-        medidor.setClasseConsumo(ClasseConsumo.RESIDENCIAL);
-        medidor.setDias(30);
-        medidor.setCliente(criarCliente(email));
-
-        return medidorRepo.saveAndFlush(medidor);
-    }
-
-    private Fatura criarFatura(Medidor medidor, LocalDate competencia) {
+    private Fatura criarFatura(UnidadeConsumidora unidade, LocalDate competencia) {
 
         Fatura fatura = new Fatura();
 
+        fatura.setUnidadeConsumidora(unidade);
         fatura.setCompetencia(competencia);
-        fatura.setUnidadesConsumidas(new BigDecimal("100.00"));
 
-        fatura.setCustoPorUnidadeAplicado(new BigDecimal("0.80"));
-        fatura.setAluguelMedidorAplicado(new BigDecimal("10.00"));
-        fatura.setTaxaServicoAplicada(new BigDecimal("5.00"));
-        fatura.setImpostoServicoAplicado(new BigDecimal("2.00"));
-        fatura.setCessAplicado(new BigDecimal("1.00"));
-        fatura.setTaxaFixaAplicada(new BigDecimal("3.00"));
+        fatura.setInicioPeriodo(competencia);
+        fatura.setFimPeriodo(competencia.plusMonths(1).minusDays(1));
 
-        fatura.setValorTotal(new BigDecimal("101.00"));
-        fatura.setStatusFatura(StatusFatura.PENDENTE);
-        fatura.setMedidor(medidor);
+        fatura.setConsumoKwh(new BigDecimal("100.000"));
+        fatura.setOrigemConsumo(OrigemConsumo.MANUAL);
+
+        fatura.setTarifaEnergiaTE(new BigDecimal("0.300000"));
+        fatura.setTarifaUsoDistribuicaoTUSD(new BigDecimal("0.500000"));
+
+        fatura.setValorTE(new BigDecimal("30.00"));
+        fatura.setValorTUSD(new BigDecimal("50.00"));
+
+        fatura.setValorBandeira(new BigDecimal("5.00"));
+        fatura.setValorSubtotal(new BigDecimal("85.00"));
+        fatura.setValorTotal(new BigDecimal("85.00"));
+
+        fatura.setDataEmissao(competencia.plusMonths(1));
+        fatura.setDataVencimento(competencia.plusMonths(1).plusDays(10));
+
+        fatura.setStatus(StatusFatura.PENDENTE);
 
         return fatura;
     }
@@ -95,9 +95,14 @@ class FaturaRepoTest {
     @DisplayName("Deve persistir uma fatura corretamente")
     void devePersistirFatura() {
 
-        Medidor medidor = criarMedidor("MED-001", "joao@email.com");
+        UnidadeConsumidora unidade = criarUnidadeConsumidora(
+                "cliente1@email.com",
+                "UC-001"
+        );
 
-        Fatura salva = faturaRepo.saveAndFlush(criarFatura(medidor, LocalDate.of(2026, 1, 1)));
+        Fatura salva = faturaRepo.saveAndFlush(
+                criarFatura(unidade, LocalDate.of(2026, 1, 1))
+        );
 
         assertThat(salva.getId()).isNotNull();
 
@@ -105,33 +110,43 @@ class FaturaRepoTest {
 
         Fatura encontrada = faturaRepo.findById(salva.getId()).orElseThrow();
 
-        assertThat(encontrada.getCompetencia()).isEqualTo(LocalDate.of(2026, 1, 1));
-        assertThat(encontrada.getUnidadesConsumidas()).isEqualByComparingTo("100.00");
-        assertThat(encontrada.getCustoPorUnidadeAplicado()).isEqualByComparingTo("0.80");
-        assertThat(encontrada.getAluguelMedidorAplicado()).isEqualByComparingTo("10.00");
-        assertThat(encontrada.getTaxaServicoAplicada()).isEqualByComparingTo("5.00");
-        assertThat(encontrada.getImpostoServicoAplicado()).isEqualByComparingTo("2.00");
-        assertThat(encontrada.getCessAplicado()).isEqualByComparingTo("1.00");
-        assertThat(encontrada.getTaxaFixaAplicada()).isEqualByComparingTo("3.00");
-        assertThat(encontrada.getValorTotal()).isEqualByComparingTo("101.00");
-        assertThat(encontrada.getStatusFatura()).isEqualTo(StatusFatura.PENDENTE);
-        assertThat(encontrada.getMedidor().getId()).isEqualTo(medidor.getId());
+        assertThat(encontrada.getCompetencia())
+                .isEqualTo(LocalDate.of(2026, 1, 1));
+
+        assertThat(encontrada.getConsumoKwh())
+                .isEqualByComparingTo("100.000");
+
+        assertThat(encontrada.getValorTotal())
+                .isEqualByComparingTo("85.00");
+
+        assertThat(encontrada.getOrigemConsumo())
+                .isEqualTo(OrigemConsumo.MANUAL);
+
+        assertThat(encontrada.getStatus())
+                .isEqualTo(StatusFatura.PENDENTE);
+
+        assertThat(encontrada.getUnidadeConsumidora().getId())
+                .isEqualTo(unidade.getId());
     }
 
     @Test
     @DisplayName("Deve buscar uma fatura pelo ID")
     void deveBuscarFaturaPorId() {
 
-        Medidor medidor = criarMedidor("MED-002", "maria@email.com");
+        UnidadeConsumidora unidade = criarUnidadeConsumidora(
+                "cliente2@email.com",
+                "UC-002"
+        );
 
-        Fatura salva = faturaRepo.saveAndFlush(criarFatura(medidor, LocalDate.of(2026, 2, 1)));
+        Fatura salva = faturaRepo.saveAndFlush(
+                criarFatura(unidade, LocalDate.of(2026, 2, 1))
+        );
 
         entityManager.clear();
 
         Optional<Fatura> resultado = faturaRepo.findById(salva.getId());
 
         assertThat(resultado).isPresent();
-
         assertThat(resultado.orElseThrow().getCompetencia())
                 .isEqualTo(LocalDate.of(2026, 2, 1));
     }
@@ -146,69 +161,96 @@ class FaturaRepoTest {
     }
 
     @Test
-    @DisplayName("Deve listar todas as faturas de um medidor")
-    void deveBuscarFaturasPorMedidor() {
+    @DisplayName("Deve listar as faturas de uma unidade consumidora")
+    void deveBuscarFaturasPorUnidadeConsumidora() {
 
-        Medidor medidor = criarMedidor("MED-003", "cliente3@email.com");
+        UnidadeConsumidora unidade = criarUnidadeConsumidora(
+                "cliente3@email.com",
+                "UC-003"
+        );
 
         faturaRepo.saveAllAndFlush(List.of(
-                criarFatura(medidor, LocalDate.of(2026, 1, 1)),
-                criarFatura(medidor, LocalDate.of(2026, 2, 1))));
+                criarFatura(unidade, LocalDate.of(2026, 1, 1)),
+                criarFatura(unidade, LocalDate.of(2026, 2, 1))
+        ));
 
-        Medidor outroMedidor = criarMedidor("MED-004", "cliente4@email.com");
+        UnidadeConsumidora outraUnidade = criarUnidadeConsumidora(
+                "cliente4@email.com",
+                "UC-004"
+        );
 
         faturaRepo.saveAndFlush(
-                criarFatura(outroMedidor, LocalDate.of(2026, 1, 1)));
+                criarFatura(outraUnidade, LocalDate.of(2026, 1, 1))
+        );
 
         entityManager.clear();
 
-        List<Fatura> resultado = faturaRepo.findByMedidor(medidor);
+        List<Fatura> resultado =
+                faturaRepo.findByUnidadeConsumidora_Id(unidade.getId());
 
         assertThat(resultado)
                 .hasSize(2)
-                .allSatisfy(fatura -> assertThat(fatura.getMedidor().getId())
-                                .isEqualTo(medidor.getId()));
+                .allSatisfy(fatura ->
+                        assertThat(fatura.getUnidadeConsumidora().getId())
+                                .isEqualTo(unidade.getId())
+                );
     }
 
     @Test
-    @DisplayName("Deve ordenar faturas por competência decrescente")
+    @DisplayName("Deve ordenar as faturas por competência decrescente")
     void deveOrdenarFaturasPorCompetenciaDecrescente() {
 
-        Medidor medidor = criarMedidor("MED-005", "cliente5@email.com");
+        UnidadeConsumidora unidade = criarUnidadeConsumidora(
+                "cliente5@email.com",
+                "UC-005"
+        );
 
         faturaRepo.saveAllAndFlush(List.of(
-                criarFatura(medidor, LocalDate.of(2026, 1, 1)),
-                criarFatura(medidor, LocalDate.of(2026, 3, 1)),
-                criarFatura(medidor, LocalDate.of(2026, 2, 1))));
+                criarFatura(unidade, LocalDate.of(2026, 1, 1)),
+                criarFatura(unidade, LocalDate.of(2026, 3, 1)),
+                criarFatura(unidade, LocalDate.of(2026, 2, 1))
+        ));
 
         entityManager.clear();
 
-        List<Fatura> resultado = faturaRepo.findByMedidorOrderByCompetenciaDesc(medidor);
+        List<Fatura> resultado =
+                faturaRepo.findByUnidadeConsumidora_IdOrderByCompetenciaDesc(
+                        unidade.getId()
+                );
 
         assertThat(resultado)
                 .extracting(Fatura::getCompetencia)
                 .containsExactly(
                         LocalDate.of(2026, 3, 1),
                         LocalDate.of(2026, 2, 1),
-                        LocalDate.of(2026, 1, 1));
+                        LocalDate.of(2026, 1, 1)
+                );
     }
 
     @Test
-    @DisplayName("Deve buscar fatura por medidor e competência")
-    void deveBuscarFaturaPorMedidorECompetencia() {
+    @DisplayName("Deve buscar fatura por unidade consumidora e competência")
+    void deveBuscarFaturaPorUnidadeECompetencia() {
 
-        Medidor medidor = criarMedidor("MED-006", "cliente6@email.com");
+        UnidadeConsumidora unidade = criarUnidadeConsumidora(
+                "cliente6@email.com",
+                "UC-006"
+        );
 
         LocalDate competencia = LocalDate.of(2026, 4, 1);
 
-        Fatura salva = faturaRepo.saveAndFlush(criarFatura(medidor, competencia));
+        Fatura salva = faturaRepo.saveAndFlush(
+                criarFatura(unidade, competencia)
+        );
 
         entityManager.clear();
 
-        Optional<Fatura> resultado = faturaRepo.findByMedidorAndCompetencia(medidor, competencia);
+        Optional<Fatura> resultado =
+                faturaRepo.findByUnidadeConsumidora_IdAndCompetencia(
+                        unidade.getId(),
+                        competencia
+                );
 
         assertThat(resultado).isPresent();
-
         assertThat(resultado.orElseThrow().getId()).isEqualTo(salva.getId());
     }
 
@@ -216,23 +258,67 @@ class FaturaRepoTest {
     @DisplayName("Não deve encontrar fatura para competência inexistente")
     void naoDeveEncontrarFaturaPorCompetenciaInexistente() {
 
-        Medidor medidor = criarMedidor("MED-007", "cliente7@email.com");
+        UnidadeConsumidora unidade = criarUnidadeConsumidora(
+                "cliente7@email.com",
+                "UC-007"
+        );
 
-        Optional<Fatura> resultado = faturaRepo.findByMedidorAndCompetencia(medidor,
-                LocalDate.of(2026, 5, 1));
+        Optional<Fatura> resultado =
+                faturaRepo.findByUnidadeConsumidora_IdAndCompetencia(
+                        unidade.getId(),
+                        LocalDate.of(2026, 5, 1)
+                );
 
         assertThat(resultado).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Deve buscar faturas pelo status")
+    void deveBuscarFaturasPorStatus() {
+
+        UnidadeConsumidora unidade = criarUnidadeConsumidora(
+                "cliente8@email.com",
+                "UC-008"
+        );
+
+        Fatura pendente = criarFatura(
+                unidade,
+                LocalDate.of(2026, 1, 1)
+        );
+
+        Fatura paga = criarFatura(
+                unidade,
+                LocalDate.of(2026, 2, 1)
+        );
+
+        paga.setStatus(StatusFatura.PAGO);
+        paga.setDataPagamento(LocalDate.of(2026, 3, 5));
+
+        faturaRepo.saveAllAndFlush(List.of(pendente, paga));
+
+        entityManager.clear();
+
+        List<Fatura> resultado =
+                faturaRepo.findByStatus(StatusFatura.PENDENTE);
+
+        assertThat(resultado).hasSize(1);
+        assertThat(resultado.get(0).getStatus())
+                .isEqualTo(StatusFatura.PENDENTE);
     }
 
     @Test
     @DisplayName("Deve contar as faturas persistidas")
     void deveContarFaturas() {
 
-        Medidor medidor = criarMedidor("MED-008", "cliente8@email.com");
+        UnidadeConsumidora unidade = criarUnidadeConsumidora(
+                "cliente9@email.com",
+                "UC-009"
+        );
 
         faturaRepo.saveAllAndFlush(List.of(
-                criarFatura(medidor, LocalDate.of(2026, 1, 1)),
-                criarFatura(medidor, LocalDate.of(2026, 2, 1))));
+                criarFatura(unidade, LocalDate.of(2026, 1, 1)),
+                criarFatura(unidade, LocalDate.of(2026, 2, 1))
+        ));
 
         assertThat(faturaRepo.count()).isEqualTo(2);
     }
@@ -241,9 +327,14 @@ class FaturaRepoTest {
     @DisplayName("Deve excluir uma fatura pelo ID")
     void deveExcluirFaturaPorId() {
 
-        Medidor medidor = criarMedidor("MED-009", "cliente9@email.com");
+        UnidadeConsumidora unidade = criarUnidadeConsumidora(
+                "cliente10@email.com",
+                "UC-010"
+        );
 
-        Fatura salva = faturaRepo.saveAndFlush(criarFatura(medidor, LocalDate.of(2026, 1, 1)));
+        Fatura salva = faturaRepo.saveAndFlush(
+                criarFatura(unidade, LocalDate.of(2026, 1, 1))
+        );
 
         UUID id = salva.getId();
 
@@ -255,33 +346,44 @@ class FaturaRepoTest {
     }
 
     @Test
-    @DisplayName("Não deve permitir duas faturas do mesmo medidor na mesma competência")
+    @DisplayName("Não deve permitir duas faturas da mesma unidade na mesma competência")
     void naoDevePermitirFaturasDuplicadasNaMesmaCompetencia() {
 
-        Medidor medidor = criarMedidor("MED-010", "cliente10@email.com");
+        UnidadeConsumidora unidade = criarUnidadeConsumidora(
+                "cliente11@email.com",
+                "UC-011"
+        );
 
         LocalDate competencia = LocalDate.of(2026, 1, 1);
 
-        faturaRepo.saveAndFlush(criarFatura(medidor, competencia));
+        faturaRepo.saveAndFlush(criarFatura(unidade, competencia));
 
-        Fatura duplicada = criarFatura(medidor, competencia);
+        Fatura duplicada = criarFatura(unidade, competencia);
 
         assertThatThrownBy(() -> faturaRepo.saveAndFlush(duplicada))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
-    @DisplayName("Deve permitir faturas de medidores diferentes na mesma competência")
-    void devePermitirFaturasDeMedidoresDiferentesNaMesmaCompetencia() {
+    @DisplayName("Deve permitir faturas de unidades diferentes na mesma competência")
+    void devePermitirFaturasDeUnidadesDiferentesNaMesmaCompetencia() {
 
-        Medidor primeiroMedidor = criarMedidor("MED-011", "cliente11@email.com");
+        UnidadeConsumidora primeiraUnidade = criarUnidadeConsumidora(
+                "cliente12@email.com",
+                "UC-012"
+        );
 
-        Medidor segundoMedidor = criarMedidor("MED-012", "cliente12@email.com");
+        UnidadeConsumidora segundaUnidade = criarUnidadeConsumidora(
+                "cliente13@email.com",
+                "UC-013"
+        );
 
         LocalDate competencia = LocalDate.of(2026, 1, 1);
 
-        faturaRepo.saveAllAndFlush(List.of(criarFatura(primeiroMedidor, competencia),
-                criarFatura(segundoMedidor, competencia)));
+        faturaRepo.saveAllAndFlush(List.of(
+                criarFatura(primeiraUnidade, competencia),
+                criarFatura(segundaUnidade, competencia)
+        ));
 
         assertThat(faturaRepo.count()).isEqualTo(2);
     }

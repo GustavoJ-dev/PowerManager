@@ -1,6 +1,9 @@
 package com.powermanager.powermanager.repository;
 
 import com.powermanager.powermanager.entity.Taxa;
+import com.powermanager.powermanager.enums.ClasseConsumo;
+import com.powermanager.powermanager.enums.ModalidadeTarifaria;
+import com.powermanager.powermanager.enums.SubgrupoTarifario;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -8,7 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,45 +27,81 @@ class TaxaRepoTest {
     @Autowired
     private EntityManager entityManager;
 
-    private Taxa criarTaxa(LocalDateTime inicio, LocalDateTime fim) {
+    private Taxa criarTaxa(
 
+            String distribuidora,
+            SubgrupoTarifario subgrupo,
+            ClasseConsumo classe,
+            ModalidadeTarifaria modalidade,
+            LocalDate inicio,
+            LocalDate fim
+    ) {
         Taxa taxa = new Taxa();
 
-        taxa.setCustoPorUnidade(new BigDecimal("0.85"));
-        taxa.setAluguelMedidor(new BigDecimal("12.00"));
-        taxa.setTaxaServico(new BigDecimal("5.00"));
-        taxa.setImpostoServico(new BigDecimal("3.50"));
-        taxa.setCess(new BigDecimal("1.25"));
-        taxa.setTaxaFixa(new BigDecimal("2.00"));
+        taxa.setDistribuidora(distribuidora);
+        taxa.setSubgrupoTarifario(subgrupo);
+        taxa.setClasseConsumo(classe);
+        taxa.setModalidadeTarifaria(modalidade);
+
+        taxa.setTarifaEnergia(new BigDecimal("0.300000"));
+        taxa.setTarifaUsoDistribuicao(new BigDecimal("0.500000"));
+
         taxa.setInicioVigencia(inicio);
         taxa.setFimVigencia(fim);
 
         return taxa;
     }
 
+    private Taxa criarTaxaResidencial(LocalDate inicio, LocalDate fim) {
+
+        return criarTaxa(
+                "Neoenergia Coelba",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                inicio,
+                fim
+        );
+    }
+
     @Test
     @DisplayName("Deve persistir uma taxa corretamente")
     void devePersistirTaxa() {
 
-        Taxa taxa = criarTaxa(
-                LocalDateTime.of(2026, 1, 1, 0, 0),
-                null);
-
-        Taxa salva = taxaRepo.saveAndFlush(taxa);
+        Taxa salva = taxaRepo.saveAndFlush(
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 1, 1),
+                        null
+                )
+        );
 
         assertThat(salva.getId()).isNotNull();
 
         entityManager.clear();
 
         Taxa encontrada = taxaRepo.findById(salva.getId()).orElseThrow();
-        assertThat(encontrada.getCustoPorUnidade()).isEqualByComparingTo("0.85");
-        assertThat(encontrada.getAluguelMedidor()).isEqualByComparingTo("12.00");
-        assertThat(encontrada.getTaxaServico()).isEqualByComparingTo("5.00");
-        assertThat(encontrada.getImpostoServico()).isEqualByComparingTo("3.50");
-        assertThat(encontrada.getCess()).isEqualByComparingTo("1.25");
-        assertThat(encontrada.getTaxaFixa()).isEqualByComparingTo("2.00");
+
+        assertThat(encontrada.getDistribuidora())
+                .isEqualTo("Neoenergia Coelba");
+
+        assertThat(encontrada.getSubgrupoTarifario())
+                .isEqualTo(SubgrupoTarifario.B1);
+
+        assertThat(encontrada.getClasseConsumo())
+                .isEqualTo(ClasseConsumo.RESIDENCIAL);
+
+        assertThat(encontrada.getModalidadeTarifaria())
+                .isEqualTo(ModalidadeTarifaria.CONVENCIONAL);
+
+        assertThat(encontrada.getTarifaEnergia())
+                .isEqualByComparingTo("0.300000");
+
+        assertThat(encontrada.getTarifaUsoDistribuicao())
+                .isEqualByComparingTo("0.500000");
+
         assertThat(encontrada.getInicioVigencia())
-                .isEqualTo(LocalDateTime.of(2026, 1, 1, 0, 0));
+                .isEqualTo(LocalDate.of(2026, 1, 1));
+
         assertThat(encontrada.getFimVigencia()).isNull();
     }
 
@@ -70,17 +109,19 @@ class TaxaRepoTest {
     @DisplayName("Deve buscar uma taxa pelo ID")
     void deveBuscarTaxaPorId() {
 
-        Taxa salva = taxaRepo.saveAndFlush(criarTaxa(
-                LocalDateTime.of(2026, 1, 1, 0, 0), null));
+        Taxa salva = taxaRepo.saveAndFlush(
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 1, 1),
+                        null
+                )
+        );
 
         entityManager.clear();
 
         Optional<Taxa> resultado = taxaRepo.findById(salva.getId());
 
         assertThat(resultado).isPresent();
-
-        assertThat(resultado.orElseThrow().getCustoPorUnidade())
-                .isEqualByComparingTo("0.85");
+        assertThat(resultado.orElseThrow().getId()).isEqualTo(salva.getId());
     }
 
     @Test
@@ -97,26 +138,33 @@ class TaxaRepoTest {
     void deveListarTaxas() {
 
         taxaRepo.saveAllAndFlush(List.of(
-                criarTaxa(
-                        LocalDateTime.of(2026, 1, 1, 0, 0),
-                        LocalDateTime.of(2026, 2, 1, 0, 0)),
-                criarTaxa(
-                        LocalDateTime.of(2026, 2, 1, 0, 0),
-                        null)));
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 1, 1),
+                        LocalDate.of(2026, 2, 1)
+                ),
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 2, 1),
+                        null
+                )
+        ));
 
         entityManager.clear();
 
-        List<Taxa> taxas = taxaRepo.findAll();
+        List<Taxa> resultado = taxaRepo.findAll();
 
-        assertThat(taxas).hasSize(2);
+        assertThat(resultado).hasSize(2);
     }
 
     @Test
     @DisplayName("Deve excluir uma taxa pelo ID")
     void deveExcluirTaxa() {
 
-        Taxa salva = taxaRepo.saveAndFlush(criarTaxa(
-                LocalDateTime.of(2026, 1, 1, 0, 0), null));
+        Taxa salva = taxaRepo.saveAndFlush(
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 1, 1),
+                        null
+                )
+        );
 
         UUID id = salva.getId();
 
@@ -127,28 +175,46 @@ class TaxaRepoTest {
     }
 
     @Test
-    @DisplayName("Deve buscar a taxa vigente em determinada data")
+    @DisplayName("Deve buscar a taxa vigente na data informada")
     void deveBuscarTaxaVigenteEm() {
 
-        Taxa salva = taxaRepo.saveAndFlush(criarTaxa(
-                LocalDateTime.of(2026, 1, 1, 0, 0), null));
+        Taxa salva = taxaRepo.saveAndFlush(
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 1, 1),
+                        LocalDate.of(2026, 7, 1)
+                )
+        );
 
         Optional<Taxa> resultado = taxaRepo.buscarTaxaVigenteEm(
-                LocalDateTime.of(2026, 3, 1, 0, 0));
+                "Neoenergia Coelba",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                LocalDate.of(2026, 3, 1)
+        );
 
         assertThat(resultado).isPresent();
         assertThat(resultado.orElseThrow().getId()).isEqualTo(salva.getId());
     }
 
     @Test
-    @DisplayName("Deve considerar a taxa vigente quando não possui fim de vigência")
+    @DisplayName("Deve considerar vigente a taxa sem fim de vigência")
     void deveBuscarTaxaSemFimDeVigencia() {
 
-        Taxa salva = taxaRepo.saveAndFlush(criarTaxa(
-                LocalDateTime.of(2026, 1, 1, 0, 0), null));
+        Taxa salva = taxaRepo.saveAndFlush(
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 1, 1),
+                        null
+                )
+        );
 
         Optional<Taxa> resultado = taxaRepo.buscarTaxaVigenteEm(
-                LocalDateTime.of(2026, 10, 1, 0, 0));
+                "Neoenergia Coelba",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                LocalDate.of(2026, 10, 1)
+        );
 
         assertThat(resultado).isPresent();
         assertThat(resultado.orElseThrow().getId()).isEqualTo(salva.getId());
@@ -158,112 +224,201 @@ class TaxaRepoTest {
     @DisplayName("Deve considerar o início da vigência como inclusivo")
     void deveBuscarTaxaNoInicioDaVigencia() {
 
-        Taxa salva = taxaRepo.saveAndFlush(criarTaxa(
-                LocalDateTime.of(2026, 1, 1, 0, 0),
-                LocalDateTime.of(2026, 6, 1, 0, 0)));
+        Taxa salva = taxaRepo.saveAndFlush(
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 1, 1),
+                        LocalDate.of(2026, 6, 1)
+                )
+        );
 
         Optional<Taxa> resultado = taxaRepo.buscarTaxaVigenteEm(
-                LocalDateTime.of(2026, 1, 1, 0, 0));
+                "Neoenergia Coelba",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                LocalDate.of(2026, 1, 1)
+        );
 
         assertThat(resultado).isPresent();
         assertThat(resultado.orElseThrow().getId()).isEqualTo(salva.getId());
     }
 
     @Test
+    @DisplayName("Não deve considerar vigente a taxa no dia do fim da vigência")
+    void naoDeveBuscarTaxaNoFimDaVigencia() {
+
+        taxaRepo.saveAndFlush(
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 1, 1),
+                        LocalDate.of(2026, 6, 1)
+                )
+        );
+
+        Optional<Taxa> resultado = taxaRepo.buscarTaxaVigenteEm(
+                "Neoenergia Coelba",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                LocalDate.of(2026, 6, 1)
+        );
+
+        assertThat(resultado).isEmpty();
+    }
+
+    @Test
     @DisplayName("Não deve buscar taxa antes do início da vigência")
     void naoDeveBuscarTaxaAntesDoInicio() {
 
-        taxaRepo.saveAndFlush(criarTaxa(
-                LocalDateTime.of(2026, 4, 1, 0, 0), null));
+        taxaRepo.saveAndFlush(
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 4, 1),
+                        null
+                )
+        );
 
         Optional<Taxa> resultado = taxaRepo.buscarTaxaVigenteEm(
-                LocalDateTime.of(2026, 3, 31, 23, 59));
+                "Neoenergia Coelba",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                LocalDate.of(2026, 3, 31)
+        );
 
         assertThat(resultado).isEmpty();
     }
 
     @Test
-    @DisplayName("Não deve considerar o fim da vigência como inclusivo")
-    void naoDeveBuscarTaxaNoFimDaVigencia() {
+    @DisplayName("Não deve encontrar taxa de outra distribuidora")
+    void naoDeveEncontrarTaxaDeOutraDistribuidora() {
 
-        taxaRepo.saveAndFlush(criarTaxa(
-                LocalDateTime.of(2026, 1, 1, 0, 0),
-                LocalDateTime.of(2026, 6, 1, 0, 0)));
+        taxaRepo.saveAndFlush(criarTaxaResidencial(
+                LocalDate.of(2026, 1, 1),
+                null
+        ));
 
         Optional<Taxa> resultado = taxaRepo.buscarTaxaVigenteEm(
-                LocalDateTime.of(2026, 6, 1, 0, 0));
+                "Outra Distribuidora",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                LocalDate.of(2026, 3, 1)
+        );
 
         assertThat(resultado).isEmpty();
     }
 
     @Test
-    @DisplayName("Deve buscar taxas com períodos sobrepostos")
+    @DisplayName("Não deve encontrar taxa de outra combinação tarifária")
+    void naoDeveEncontrarTaxaDeOutraCombinacaoTarifaria() {
+
+        taxaRepo.saveAndFlush(criarTaxaResidencial(
+                LocalDate.of(2026, 1, 1),
+                null
+        ));
+
+        Optional<Taxa> resultado = taxaRepo.buscarTaxaVigenteEm(
+                "Neoenergia Coelba",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.COMERCIAL_SERVICOS,
+                ModalidadeTarifaria.CONVENCIONAL,
+                LocalDate.of(2026, 3, 1)
+        );
+
+        assertThat(resultado).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Deve encontrar taxa com período sobreposto")
     void deveBuscarTaxasComSobreposicao() {
 
-        Taxa salva = taxaRepo.saveAndFlush(criarTaxa(
-                LocalDateTime.of(2026, 1, 1, 0, 0),
-                LocalDateTime.of(2026, 5, 1, 0, 0)));
+        Taxa salva = taxaRepo.saveAndFlush(
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 1, 1),
+                        LocalDate.of(2026, 5, 1)
+                )
+        );
 
         List<Taxa> resultado = taxaRepo.buscarTaxasComSobreposicao(
-                LocalDateTime.of(2026, 4, 1, 0, 0),
-                LocalDateTime.of(2026, 6, 1, 0, 0));
+                "Neoenergia Coelba",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                LocalDate.of(2026, 4, 1),
+                LocalDate.of(2026, 6, 1)
+        );
 
-        assertThat(resultado).extracting(Taxa::getId).containsExactly(salva.getId());
-    }
-
-    @Test
-    @DisplayName("Deve retornar lista vazia quando não houver sobreposição")
-    void deveRetornarListaVaziaQuandoNaoHouverSobreposicao() {
-
-        taxaRepo.saveAndFlush(criarTaxa(
-                LocalDateTime.of(2026, 1, 1, 0, 0),
-                LocalDateTime.of(2026, 2, 1, 0, 0)));
-
-        List<Taxa> resultado = taxaRepo.buscarTaxasComSobreposicao(
-                LocalDateTime.of(2026, 3, 1, 0, 0),
-                LocalDateTime.of(2026, 4, 1, 0, 0));
-
-        assertThat(resultado).isEmpty();
+        assertThat(resultado)
+                .extracting(Taxa::getId)
+                .containsExactly(salva.getId());
     }
 
     @Test
     @DisplayName("Deve encontrar sobreposição quando o fim do intervalo consultado for nulo")
     void deveEncontrarSobreposicaoQuandoFimForNulo() {
 
-        taxaRepo.saveAndFlush(criarTaxa(
-                LocalDateTime.of(2026, 1, 1, 0, 0), null));
+        Taxa salva = taxaRepo.saveAndFlush(
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 1, 1),
+                        null
+                )
+        );
 
         List<Taxa> resultado = taxaRepo.buscarTaxasComSobreposicao(
-                LocalDateTime.of(2026, 6, 1, 0, 0), null);
+                "Neoenergia Coelba",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                LocalDate.of(2026, 6, 1),
+                null
+        );
 
-        assertThat(resultado).hasSize(1);
-    }
-
-    @Test
-    @DisplayName("Deve encontrar sobreposição quando o período consultado possui fim")
-    void deveEncontrarSobreposicaoQuandoFimEstiverPreenchido() {
-
-        Taxa salva = taxaRepo.saveAndFlush(criarTaxa(
-                LocalDateTime.of(2026, 1, 1, 0, 0), null));
-
-        List<Taxa> resultado = taxaRepo.buscarTaxasComSobreposicao(
-                LocalDateTime.of(2026, 3, 1, 0, 0),
-                LocalDateTime.of(2026, 8, 1, 0, 0));
-
-        assertThat(resultado).extracting(Taxa::getId).containsExactly(salva.getId());
+        assertThat(resultado)
+                .extracting(Taxa::getId)
+                .containsExactly(salva.getId());
     }
 
     @Test
     @DisplayName("Não deve encontrar sobreposição quando os períodos apenas se encostam")
     void naoDeveEncontrarSobreposicaoQuandoPeriodosApenasSeEncostarem() {
 
-        taxaRepo.saveAndFlush(criarTaxa(
-                LocalDateTime.of(2026, 1, 1, 0, 0),
-                LocalDateTime.of(2026, 6, 1, 0, 0)));
+        taxaRepo.saveAndFlush(
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 1, 1),
+                        LocalDate.of(2026, 6, 1)
+                )
+        );
 
         List<Taxa> resultado = taxaRepo.buscarTaxasComSobreposicao(
-                LocalDateTime.of(2026, 6, 1, 0, 0),
-                LocalDateTime.of(2026, 12, 1, 0, 0));
+                "Neoenergia Coelba",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                LocalDate.of(2026, 6, 1),
+                LocalDate.of(2026, 12, 1)
+        );
+
+        assertThat(resultado).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Não deve encontrar sobreposição para outra combinação tarifária")
+    void naoDeveEncontrarSobreposicaoDeOutraCombinacao() {
+
+        taxaRepo.saveAndFlush(
+                criarTaxaResidencial(
+                        LocalDate.of(2026, 1, 1),
+                        LocalDate.of(2026, 5, 1)
+                )
+        );
+
+        List<Taxa> resultado = taxaRepo.buscarTaxasComSobreposicao(
+                "Neoenergia Coelba",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.COMERCIAL_SERVICOS,
+                ModalidadeTarifaria.CONVENCIONAL,
+                LocalDate.of(2026, 4, 1),
+                LocalDate.of(2026, 6, 1)
+        );
 
         assertThat(resultado).isEmpty();
     }

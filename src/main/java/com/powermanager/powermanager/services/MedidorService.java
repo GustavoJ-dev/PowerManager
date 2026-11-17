@@ -1,34 +1,173 @@
+
 package com.powermanager.powermanager.services;
 
 import com.powermanager.powermanager.dto.medidor.MedidorAtualizacaoDTO;
 import com.powermanager.powermanager.dto.medidor.MedidorCadastroDTO;
 import com.powermanager.powermanager.dto.medidor.MedidorResponseDTO;
-import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.entity.Medidor;
-import com.powermanager.powermanager.exception.ClienteNotFoundException;
-import com.powermanager.powermanager.exception.MedidorNotFoundException;
-import com.powermanager.powermanager.exception.MedidorValidationException;
+import com.powermanager.powermanager.entity.UnidadeConsumidora;
+import com.powermanager.powermanager.exception.medidor.MedidorNotFoundException;
+import com.powermanager.powermanager.exception.medidor.MedidorValidationException;
+import com.powermanager.powermanager.exception.unidade_consumidora.UnidadeConsumidoraNotFoundException;
 import com.powermanager.powermanager.mapper.MedidorMapper;
-import com.powermanager.powermanager.repository.ClienteRepo;
 import com.powermanager.powermanager.repository.MedidorRepo;
+import com.powermanager.powermanager.repository.UnidadeConsumidoraRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class MedidorService {
 
     private final MedidorRepo medidorRepo;
-    private final ClienteRepo clienteRepo;
+    private final UnidadeConsumidoraRepo unidadeConsumidoraRepo;
     private final MedidorMapper medidorMapper;
 
-    public MedidorResponseDTO cadastrarMedidor(MedidorCadastroDTO medidorDTO){
+    @Transactional
+    public MedidorResponseDTO cadastrarMedidor(MedidorCadastroDTO medidorDTO) {
 
-        if (medidorDTO == null){
+        validarDadosCadastro(medidorDTO);
+
+        UnidadeConsumidora unidade = unidadeConsumidoraRepo
+                .findById(medidorDTO.unidadeConsumidoraId())
+                .orElseThrow(() -> new UnidadeConsumidoraNotFoundException(
+                        "Unidade consumidora não encontrada."));
+
+        if (medidorRepo.findByNumero(medidorDTO.numero()).isPresent()) {
+
+            throw new MedidorValidationException("Já existe um medidor cadastrado com este número.");
+        }
+
+        if (medidorRepo.findByUnidadeConsumidora_IdAndAtivoTrue(unidade.getId()).isPresent()) {
+
+            throw new MedidorValidationException("A unidade consumidora já possui um medidor ativo. "
+                            + "Realize a retirada do medidor atual antes de cadastrar outro.");
+        }
+
+        Medidor medidor = medidorMapper.paraEntidade(medidorDTO);
+
+        medidor.setUnidadeConsumidora(unidade);
+        medidor.setDataInstalacao(medidorDTO.dataInstalacao());
+        medidor.setDataRetirada(null);
+        medidor.setAtivo(true);
+
+        Medidor medidorSalvo = medidorRepo.save(medidor);
+
+        return medidorMapper.paraResponseDTO(medidorSalvo);
+    }
+
+    public MedidorResponseDTO buscarPorId(UUID id) {
+
+        Medidor medidor = buscarEntidadePorId(id);
+
+        return medidorMapper.paraResponseDTO(medidor);
+    }
+
+    public MedidorResponseDTO buscarPorNumero(String numero) {
+
+        if (numero == null || numero.isBlank()) {
+
+            throw new MedidorValidationException("O número do medidor é obrigatório.");
+        }
+
+        Medidor medidor = medidorRepo.findByNumero(numero)
+                .orElseThrow(() -> new MedidorNotFoundException("Medidor não encontrado."));
+
+        return medidorMapper.paraResponseDTO(medidor);
+    }
+
+    public List<MedidorResponseDTO> listarMedidores() {
+
+        return medidorRepo.findAll()
+                .stream()
+                .map(medidorMapper::paraResponseDTO)
+                .toList();
+    }
+
+    public List<MedidorResponseDTO> listarPorUnidadeConsumidora(UUID unidadeConsumidoraId) {
+
+        if (unidadeConsumidoraId == null) {
+
+            throw new MedidorValidationException("O ID da unidade consumidora é obrigatório.");
+        }
+
+        if (!unidadeConsumidoraRepo.existsById(unidadeConsumidoraId)) {
+
+            throw new UnidadeConsumidoraNotFoundException("Unidade consumidora não encontrada.");
+        }
+
+        return medidorRepo
+                .findByUnidadeConsumidora_Id(unidadeConsumidoraId)
+                .stream()
+                .map(medidorMapper::paraResponseDTO)
+                .toList();
+    }
+
+    @Transactional
+    public MedidorResponseDTO atualizarMedidor(UUID id, MedidorAtualizacaoDTO medidorDTO) {
+
+        if (medidorDTO == null) {
+
+            throw new MedidorValidationException("Os dados de atualização do medidor são obrigatórios.");
+        }
+
+        Medidor medidor = buscarEntidadePorId(id);
+
+        medidorMapper.atualizarEntidade(medidorDTO, medidor);
+
+        Medidor medidorAtualizado = medidorRepo.save(medidor);
+
+        return medidorMapper.paraResponseDTO(medidorAtualizado);
+    }
+
+    @Transactional
+    public MedidorResponseDTO retirarMedidor(UUID id, LocalDate dataRetirada) {
+
+        if (dataRetirada == null) {
+
+            throw new MedidorValidationException("A data de retirada é obrigatória.");
+        }
+
+        Medidor medidor = buscarEntidadePorId(id);
+
+        if (!Boolean.TRUE.equals(medidor.getAtivo()) || medidor.getDataRetirada() != null) {
+
+            throw new MedidorValidationException("O medidor informado já está retirado ou possui situação inconsistente.");
+        }
+
+        if (medidor.getDataInstalacao() == null || !dataRetirada.isAfter(medidor.getDataInstalacao())) {
+
+            throw new MedidorValidationException("A data de retirada deve ser posterior à data de instalação.");
+        }
+
+        medidor.setAtivo(false);
+        medidor.setDataRetirada(dataRetirada);
+
+        Medidor medidorRetirado = medidorRepo.save(medidor);
+
+        return medidorMapper.paraResponseDTO(medidorRetirado);
+    }
+
+    private Medidor buscarEntidadePorId(UUID id) {
+
+        if (id == null) {
+
+            throw new MedidorValidationException("O ID do medidor é obrigatório.");
+        }
+
+        return medidorRepo.findById(id)
+                .orElseThrow(() -> new MedidorNotFoundException("Medidor não encontrado."));
+    }
+
+    private void validarDadosCadastro(MedidorCadastroDTO medidorDTO) {
+
+        if (medidorDTO == null) {
 
             throw new MedidorValidationException("Os dados do medidor são obrigatórios.");
         }
@@ -38,111 +177,15 @@ public class MedidorService {
             throw new MedidorValidationException("O número do medidor é obrigatório.");
         }
 
-        if (medidorDTO.clienteId() == null) {
+        if (medidorDTO.dataInstalacao() == null) {
 
-            throw new MedidorValidationException("O cliente associado é obrigatório.");
+            throw new MedidorValidationException("A data de instalação é obrigatória.");
         }
 
-        if (medidorRepo.findByNumero(medidorDTO.numero()).isPresent()){
+        if (medidorDTO.unidadeConsumidoraId() == null) {
 
-            throw new MedidorValidationException(
-                    "Já existe um medidor cadastrado com este número: " + medidorDTO.numero());
+            throw new MedidorValidationException("A unidade consumidora associada é obrigatória.");
         }
-
-        Cliente cliente = clienteRepo.findById(medidorDTO.clienteId())
-                .orElseThrow(()-> new ClienteNotFoundException("Cliente não encontrado."));
-
-
-        Medidor medidor = medidorMapper.paraEntidade(medidorDTO);
-
-        medidor.setCliente(cliente);
-
-        Medidor medidorSalvo = medidorRepo.save(medidor);
-
-        return medidorMapper.paraResponseDTO(medidorSalvo);
-    }
-
-    public MedidorResponseDTO buscarPorNumero(String numero){
-
-        if (numero == null || numero.isBlank()) {
-
-            throw new MedidorValidationException("O número do medidor é obrigatório.");
-        }
-
-        Medidor medidor = medidorRepo.findByNumero(numero).orElseThrow(
-                () -> new MedidorNotFoundException("Medidor não encontrado pelo número:" + numero));
-
-        return medidorMapper.paraResponseDTO(medidor);
-    }
-
-    public MedidorResponseDTO buscarPorId(UUID id){
-
-        if (id == null) {
-
-            throw new MedidorValidationException("O ID do medidor é obrigatório.");
-        }
-
-        Medidor medidor = medidorRepo.findById(id).orElseThrow( ()->
-                new MedidorNotFoundException("medidor não encontrado: " + id));
-
-        return medidorMapper.paraResponseDTO(medidor);
-    }
-
-    public List<MedidorResponseDTO> listarMedidores(){
-
-        return medidorRepo.findAll()
-                .stream()
-                .map(medidorMapper::paraResponseDTO)
-                .toList();
-    }
-
-    public MedidorResponseDTO atualizarMedidor(UUID id, MedidorAtualizacaoDTO medidorAttDTO) {
-
-        if (id == null) {
-
-            throw new MedidorValidationException("O ID do medidor é obrigatório.");
-        }
-
-        if (medidorAttDTO == null) {
-
-            throw new MedidorValidationException("Os dados de atualização são obrigatórios.");
-        }
-
-        if (medidorAttDTO.numero() == null || medidorAttDTO.numero().isBlank()) {
-
-            throw new MedidorValidationException("O número do medidor é obrigatório.");
-        }
-
-
-        Medidor medidor = medidorRepo.findById(id).orElseThrow(
-                ()-> new MedidorNotFoundException("Medidor não encontrado: " + id));
-
-        //verifica se o numero ja pertence a outro medidor
-
-        Optional<Medidor> medidorExistente = medidorRepo.findByNumero(medidorAttDTO.numero());
-
-        if (medidorExistente.isPresent() && !medidorExistente.get().getId().equals(id)){
-
-            throw new MedidorValidationException("Já existe outro medidor cadastrado com esse número");
-        }
-
-        medidorMapper.atualizarEntidade(medidorAttDTO, medidor);
-
-        Medidor medidorAtualizado = medidorRepo.save(medidor);
-
-        return medidorMapper.paraResponseDTO(medidorAtualizado);
-    }
-
-    public void excluirMedidor(UUID medidorId){
-
-        if (medidorId == null) {
-
-            throw new MedidorValidationException("O ID do medidor é obrigatório.");
-        }
-
-        medidorRepo.findById(medidorId).orElseThrow(
-                ()-> new MedidorNotFoundException("Medidor não encontrado: " + medidorId));
-
-        medidorRepo.deleteById(medidorId);
     }
 }
+

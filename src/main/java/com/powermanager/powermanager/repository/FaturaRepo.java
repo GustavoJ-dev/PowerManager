@@ -1,7 +1,7 @@
 package com.powermanager.powermanager.repository;
 
 import com.powermanager.powermanager.entity.Fatura;
-import com.powermanager.powermanager.entity.Medidor;
+import com.powermanager.powermanager.enums.StatusFatura;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -13,9 +13,11 @@ import java.util.UUID;
 @Repository
 public interface FaturaRepo extends JpaRepository<Fatura, UUID> {
 
-    List<Fatura> findByMedidor(Medidor medidor);
+    List<Fatura> findByUnidadeConsumidora_Id(UUID unidadeConsumidoraId);
 
-    List<Fatura> findByMedidorOrderByCompetenciaDesc(Medidor medidor);
+    List<Fatura> findByUnidadeConsumidora_IdOrderByCompetenciaDesc(UUID unidadeConsumidoraId);
 
-    Optional<Fatura> findByMedidorAndCompetencia(Medidor medidor, LocalDate competencia);
+    Optional<Fatura> findByUnidadeConsumidora_IdAndCompetencia(UUID unidadeConsumidoraId, LocalDate competencia);
+
+    List<Fatura> findByStatus(StatusFatura status);
 }

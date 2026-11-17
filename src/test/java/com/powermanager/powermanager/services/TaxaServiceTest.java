@@ -1,11 +1,13 @@
 package com.powermanager.powermanager.services;
 
-import com.powermanager.powermanager.dto.taxa.TaxaAtualizacaoDTO;
 import com.powermanager.powermanager.dto.taxa.TaxaCadastroDTO;
 import com.powermanager.powermanager.dto.taxa.TaxaResponseDTO;
 import com.powermanager.powermanager.entity.Taxa;
-import com.powermanager.powermanager.exception.TaxaNotFoundException;
-import com.powermanager.powermanager.exception.TaxaValidationException;
+import com.powermanager.powermanager.enums.ClasseConsumo;
+import com.powermanager.powermanager.enums.ModalidadeTarifaria;
+import com.powermanager.powermanager.enums.SubgrupoTarifario;
+import com.powermanager.powermanager.exception.taxa.TaxaNotFoundException;
+import com.powermanager.powermanager.exception.taxa.TaxaValidationException;
 import com.powermanager.powermanager.mapper.TaxaMapper;
 import com.powermanager.powermanager.repository.TaxaRepo;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,19 +17,18 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-
 @ExtendWith(MockitoExtension.class)
-public class TaxaServiceTest {
+class TaxaServiceTest {
 
     @Mock
     private TaxaRepo taxaRepo;
@@ -38,503 +39,439 @@ public class TaxaServiceTest {
     @InjectMocks
     private TaxaService taxaService;
 
+    private TaxaCadastroDTO cadastroDTO;
+    private Taxa taxa;
+    private TaxaResponseDTO responseDTO;
+
+    private UUID id;
+    private LocalDate inicio;
+    private LocalDate fim;
+
     @BeforeEach
-    void configurarMapper(){
+    void setUp() {
 
-        //simula a conversão de DTO de cadastro para entidade.
-        lenient().when(taxaMapper.paraEntidade(any(TaxaCadastroDTO.class)))
-                .thenAnswer(invocation ->
-                        converterCadastro(invocation.getArgument(0)));
+        id = UUID.randomUUID();
+        inicio = LocalDate.of(2026, 1, 1);
+        fim = LocalDate.of(2026, 12, 31);
 
-        //simula a conversão de entidade para DTO de resposta
-        lenient().when(taxaMapper.paraResponseDTO(any(Taxa.class)))
-                .thenAnswer(invocation -> criarResposta(invocation.getArgument(0)));
-
-        //simula o preenchimento da nova entidade durante a atualização
-        lenient().doAnswer(invocation -> {
-
-            TaxaAtualizacaoDTO atualizacaoDTO = invocation.getArgument(0);
-            Taxa taxa = invocation.getArgument(1);
-
-            preencherTaxa(
-                    taxa,
-                    atualizacaoDTO.custoPorUnidade(),
-                    atualizacaoDTO.aluguelMedidor(),
-                    atualizacaoDTO.taxaServico(),
-                    atualizacaoDTO.impostoServico(),
-                    atualizacaoDTO.cess(),
-                    atualizacaoDTO.taxaFixa());
-
-            return null;
-        }).when(taxaMapper).atualizarEntidade(any(TaxaAtualizacaoDTO.class),
-                any(Taxa.class));
-
-    }
-    private Taxa criarTaxaValida(){
-
-        Taxa taxa  = new Taxa();
-
-        taxa.setCustoPorUnidade(new BigDecimal("1.50"));
-        taxa.setAluguelMedidor(new BigDecimal("10.00"));
-        taxa.setTaxaServico(new BigDecimal("5.00"));
-        taxa.setImpostoServico(new BigDecimal("2.00"));
-        taxa.setCess(new BigDecimal("1.00"));
-        taxa.setTaxaFixa(new BigDecimal("3.00"));
-        taxa.setInicioVigencia(LocalDateTime.of(2026, 1, 1, 0, 0));
-        taxa.setFimVigencia(null);
-
-        return taxa;
-    }
-
-    private void preencherTaxa(Taxa taxa, BigDecimal custoPorUnidade, BigDecimal aluguelMedidor,
-                               BigDecimal taxaServico, BigDecimal impostoServico, BigDecimal cess,
-                               BigDecimal taxaFixa){
-
-        taxa.setCustoPorUnidade(custoPorUnidade);
-        taxa.setAluguelMedidor(aluguelMedidor);
-        taxa.setTaxaServico(taxaServico);
-        taxa.setImpostoServico(impostoServico);
-        taxa.setCess(cess);
-        taxa.setTaxaFixa(taxaFixa);
-    }
-    private Taxa converterCadastro(TaxaCadastroDTO taxaCadastroDTO){
-
-        Taxa taxa = new Taxa();
-
-        preencherTaxa(
-                taxa,
-                taxaCadastroDTO.custoPorUnidade(),
-                taxaCadastroDTO.aluguelMedidor(),
-                taxaCadastroDTO.taxaServico(),
-                taxaCadastroDTO.impostoServico(),
-                taxaCadastroDTO.cess(),
-                taxaCadastroDTO.taxaFixa());
-
-        taxa.setInicioVigencia(taxaCadastroDTO.inicioVigencia());
-        taxa.setFimVigencia(taxaCadastroDTO.fimVigencia());
-
-        return taxa;
-    }
-
-    private TaxaCadastroDTO criarCadastroValido(){
-
-        return new TaxaCadastroDTO(
-                new BigDecimal("1.50"),
-                new BigDecimal("10.00"),
-                new BigDecimal("5.00"),
-                new BigDecimal("2.00"),
-                new BigDecimal("1.00"),
-                new BigDecimal("3.00"),
-                LocalDateTime.of(2026, 1, 1, 0, 0),
-                null);
-    }
-
-    private TaxaAtualizacaoDTO criarAtualizacaoValida(LocalDateTime inicio){
-
-        return new TaxaAtualizacaoDTO(
-                new BigDecimal("1.50"),
-                new BigDecimal("10.00"),
-                new BigDecimal("5.00"),
-                new BigDecimal("2.00"),
-                new BigDecimal("1.00"),
-                new BigDecimal("3.00"),
-                inicio);
-    }
-
-    private TaxaResponseDTO criarResposta(Taxa taxa) {
-
-        return new TaxaResponseDTO(
-                taxa.getId(),
-                taxa.getCustoPorUnidade(),
-                taxa.getAluguelMedidor(),
-                taxa.getTaxaServico(),
-                taxa.getImpostoServico(),
-                taxa.getCess(),
-                taxa.getTaxaFixa(),
-                taxa.getInicioVigencia(),
-                taxa.getFimVigencia());
-    }
-
-    @Test
-    void deveCadastrarNovaTaxa(){
-
-        TaxaCadastroDTO dto = criarCadastroValido();
-
-        when(taxaRepo.buscarTaxasComSobreposicao(dto.inicioVigencia(), dto.fimVigencia()))
-                .thenReturn(List.of());
-
-        when(taxaRepo.save(any(Taxa.class))).thenAnswer(
-                invocation -> invocation.getArgument(0));
-
-        TaxaResponseDTO resultado = taxaService.cadastrarNovaTaxa(dto);
-
-        assertEquals(dto.custoPorUnidade(), resultado.custoPorUnidade());
-        assertEquals(dto.inicioVigencia(), resultado.inicioVigencia());
-
-        verify(taxaMapper).paraEntidade(dto);
-        verify(taxaRepo).buscarTaxasComSobreposicao(dto.inicioVigencia(), dto.fimVigencia());
-
-        verify(taxaRepo).save(any(Taxa.class));
-    }
-
-    @Test
-    void deveCadastrarTaxaQuandoFimForPosteriorAoInicio() {
-
-        LocalDateTime inicio = LocalDateTime.of(2026, 1, 1, 0, 0);
-        LocalDateTime fim = inicio.plusMonths(6L);
-
-        TaxaCadastroDTO dto = new TaxaCadastroDTO(
-                new BigDecimal("1.50"),
-                new BigDecimal("10.00"),
-                new BigDecimal("5.00"),
-                new BigDecimal("2.00"),
-                new BigDecimal("1.00"),
-                new BigDecimal("3.00"),
+        cadastroDTO = new TaxaCadastroDTO(
+                "Distribuidora Teste",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                new BigDecimal("0.350000"),
+                new BigDecimal("0.250000"),
                 inicio,
-                fim);
+                fim
+        );
 
-        when(taxaRepo.buscarTaxasComSobreposicao(inicio, fim)).thenReturn(List.of());
+        taxa = new Taxa();
+        taxa.setId(id);
+        taxa.setDistribuidora("Distribuidora Teste");
+        taxa.setSubgrupoTarifario(SubgrupoTarifario.B1);
+        taxa.setClasseConsumo(ClasseConsumo.RESIDENCIAL);
+        taxa.setModalidadeTarifaria(ModalidadeTarifaria.CONVENCIONAL);
+        taxa.setTarifaEnergia(new BigDecimal("0.350000"));
+        taxa.setTarifaUsoDistribuicao(new BigDecimal("0.250000"));
+        taxa.setInicioVigencia(inicio);
+        taxa.setFimVigencia(fim);
 
-        when(taxaRepo.save(any(Taxa.class))).thenAnswer(
-                invocation -> invocation.getArgument(0));
-
-        TaxaResponseDTO resultado = taxaService.cadastrarNovaTaxa(dto);
-
-        assertEquals(inicio, resultado.inicioVigencia());
-        assertEquals(fim, resultado.fimVigencia());
-
-        verify(taxaRepo).save(any(Taxa.class));
-    }
-
-    @Test
-    void deveDefinirInicioVigenciaQuandoForNulo(){
-
-        TaxaCadastroDTO dto = new TaxaCadastroDTO(
-                new BigDecimal("1.50"),
-                new BigDecimal("10.00"),
-                new BigDecimal("5.00"),
-                new BigDecimal("2.00"),
-                new BigDecimal("1.00"),
-                new BigDecimal("3.00"),
-                null,
-                null);
-
-        when(taxaRepo.buscarTaxasComSobreposicao(any(LocalDateTime.class), isNull()))
-                .thenReturn(List.of());
-
-        when(taxaRepo.save(any(Taxa.class))).thenAnswer(
-                invocation -> invocation.getArgument(0));
-
-        TaxaResponseDTO resultado = taxaService.cadastrarNovaTaxa(dto);
-
-        assertNotNull(resultado.inicioVigencia());
-
-        verify(taxaRepo).save(any(Taxa.class));
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoInicioDoPeriodoForNulo() throws Exception {
-
-        var metodo = TaxaService.class.getDeclaredMethod(
-                "validarPeriodo", LocalDateTime.class, LocalDateTime.class);
-
-        metodo.setAccessible(true);
-
-        var excecao = assertThrows(InvocationTargetException.class,
-                ()->metodo.invoke(taxaService,null, null));
-
-        assertInstanceOf(TaxaValidationException.class, excecao.getCause());
-
-        verifyNoInteractions(taxaRepo);
-    }
-
-    @Test
-    void deveLancarExcecaoAoCadastrarTaxaNula(){
-
-        assertThrows(TaxaValidationException.class,
-                ()-> taxaService.cadastrarNovaTaxa(null));
-
-        verifyNoInteractions(taxaRepo, taxaMapper);
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoCustoPorUnidadeForNulo(){
-
-        TaxaCadastroDTO dto = new TaxaCadastroDTO(
-                null,
-                new BigDecimal("10.00"),
-                new BigDecimal("5.00"),
-                new BigDecimal("2.00"),
-                new BigDecimal("1.00"),
-                new BigDecimal("3.00"),
-                LocalDateTime.of(2026, 1, 1, 0, 0),
-                null);
-
-        assertThrows(TaxaValidationException.class,
-                ()-> taxaService.cadastrarNovaTaxa(dto));
-
-        verify(taxaRepo, never()).save(any(Taxa.class));
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoCustoPorUnidadeForNegativo() {
-
-        TaxaCadastroDTO dto = new TaxaCadastroDTO(
-                new BigDecimal("-1.00"),
-                new BigDecimal("10.00"),
-                new BigDecimal("5.00"),
-                new BigDecimal("2.00"),
-                new BigDecimal("1.00"),
-                new BigDecimal("3.00"),
-                LocalDateTime.of(2026, 1, 1, 0, 0),
-                null);
-
-        assertThrows(TaxaValidationException.class,
-                ()-> taxaService.cadastrarNovaTaxa(dto));
-
-        verify(taxaRepo, never()).save(any(Taxa.class));
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoValorMonetarioForNegativo(){
-
-        TaxaCadastroDTO dto = new TaxaCadastroDTO(
-                new BigDecimal("1.50"),
-                new BigDecimal("10.00"),
-                new BigDecimal("5.00"),
-                new BigDecimal("2.00"),
-                new BigDecimal("1.00"),
-                new BigDecimal("-1.00"),
-                LocalDateTime.of(2026, 1, 1, 0, 0),
-                null);
-
-        assertThrows(TaxaValidationException.class,
-                () -> taxaService.cadastrarNovaTaxa(dto));
-
-        verify(taxaRepo, never()).save(any(Taxa.class));
-
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoFimNaoForPosteriorAoInicio(){
-
-        LocalDateTime inicio = LocalDateTime.of(2026, 1, 1, 0, 0);
-
-        TaxaCadastroDTO dto = new TaxaCadastroDTO(
-                new BigDecimal("1.50"),
-                new BigDecimal("10.00"),
-                new BigDecimal("5.00"),
-                new BigDecimal("2.00"),
-                new BigDecimal("1.00"),
-                new BigDecimal("3.00"),
+        responseDTO = new TaxaResponseDTO(
+                id,
+                "Distribuidora Teste",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                new BigDecimal("0.350000"),
+                new BigDecimal("0.250000"),
                 inicio,
-                inicio);
-
-        assertThrows(TaxaValidationException.class,
-                () -> taxaService.cadastrarNovaTaxa(dto));
-
-        verify(taxaRepo, never()).save(any(Taxa.class));
+                fim
+        );
     }
 
     @Test
-    void deveLancarExcecaoQuandoHouverSobreposicao(){
+    void deveCadastrarTaxaComSucesso() {
 
-        TaxaCadastroDTO dto = criarCadastroValido();
+        when(taxaMapper.paraEntidade(cadastroDTO)).thenReturn(taxa);
+        when(taxaRepo.buscarTaxasComSobreposicao(
+                anyString(), any(), any(), any(), any(), any()
+        )).thenReturn(List.of());
+        when(taxaRepo.save(taxa)).thenReturn(taxa);
+        when(taxaMapper.paraResponseDTO(taxa)).thenReturn(responseDTO);
 
-        when(taxaRepo.buscarTaxasComSobreposicao(dto.inicioVigencia(), dto.fimVigencia()))
-                .thenReturn(List.of(criarTaxaValida()));
-
-        assertThrows(TaxaValidationException.class,
-                ()-> taxaService.cadastrarNovaTaxa(dto));
-
-        verify(taxaRepo, never()).save(any(Taxa.class));
-    }
-
-    @Test
-    void deveObterTaxaNaData(){
-
-        LocalDateTime data = LocalDateTime.of(2026, 5, 1, 0, 0);
-
-        Taxa taxa = criarTaxaValida();
-
-        when(taxaRepo.buscarTaxaVigenteEm(data)).thenReturn(Optional.of(taxa));
-
-        TaxaResponseDTO resultado = taxaService.obterTaxaNaData(data);
-
-        assertEquals(taxa.getCustoPorUnidade(), resultado.custoPorUnidade());
-        assertEquals(taxa.getInicioVigencia(), resultado.inicioVigencia());
-
-        verify(taxaRepo).buscarTaxaVigenteEm(data);
-
-        verify(taxaRepo).buscarTaxaVigenteEm(data);
-        verify(taxaMapper).paraResponseDTO(taxa);
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoDataForNula(){
-
-        assertThrows(TaxaValidationException.class, ()->
-                taxaService.obterTaxaNaData(null));
-
-        verifyNoInteractions(taxaRepo);
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoNaoHouverTaxaVigenteNaData(){
-
-
-        LocalDateTime data = LocalDateTime.of(2026, 5, 1, 0, 0);
-
-        when(taxaRepo.buscarTaxaVigenteEm(data)).thenReturn(Optional.empty());
-
-        assertThrows(TaxaNotFoundException.class,
-                ()-> taxaService.obterTaxaNaData(data));
-
-        verify(taxaRepo).buscarTaxaVigenteEm(data);
-        verify(taxaMapper, never()).paraResponseDTO(any(Taxa.class));
-    }
-
-    @Test
-    void deveListarHistorico(){
-
-        List<Taxa> taxas = List.of(criarTaxaValida(), criarTaxaValida());
-
-        when(taxaRepo.findAll()).thenReturn(taxas);
-
-        List<TaxaResponseDTO> resultado = taxaService.listarHistorico();
-
-        assertEquals(2, resultado.size());
-        assertEquals(taxas.get(0).getCustoPorUnidade(), resultado.get(0).custoPorUnidade());
-
-        verify(taxaRepo).findAll();
-        verify(taxaMapper, times(2)).paraResponseDTO(any(Taxa.class));
-    }
-
-    @Test
-    void deveAtualizarTaxa(){
-
-        LocalDateTime inicioAtual = LocalDateTime.of(2026, 1, 1, 0, 0);
-        LocalDateTime inicioNova = LocalDateTime.of(2026, 6, 1, 0, 0);
-
-        Taxa taxaAtual = criarTaxaValida();
-        taxaAtual.setInicioVigencia(inicioAtual);
-
-        BigDecimal custoHistorico = taxaAtual.getCustoPorUnidade();
-
-        TaxaAtualizacaoDTO dto = criarAtualizacaoValida(inicioNova);
-
-        when(taxaRepo.buscarTaxaVigenteEm(any(LocalDateTime.class)))
-                .thenReturn(Optional.of(taxaAtual));
-
-        when(taxaRepo.save(any(Taxa.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        TaxaResponseDTO resultado = taxaService.atualizarTaxa(dto);
-
-        assertEquals(inicioNova, taxaAtual.getFimVigencia());
-        assertEquals(custoHistorico, taxaAtual.getCustoPorUnidade());
-
-        assertEquals(inicioNova, resultado.inicioVigencia());
-        assertNull(resultado.fimVigencia());
-        assertNull(resultado.id());
-
-        verify(taxaRepo, times(2))
-                .save(any(Taxa.class));
-
-        verify(taxaMapper).atualizarEntidade(eq(dto), any(Taxa.class));
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoNovaVigenciaNaoForPosterior(){
-
-        LocalDateTime inicio = LocalDateTime.of(2026, 6, 1, 0, 0);
-
-        Taxa taxaAtual = criarTaxaValida();
-        taxaAtual.setInicioVigencia(inicio);
-
-        TaxaAtualizacaoDTO dto = criarAtualizacaoValida(inicio);
-
-        when(taxaRepo.buscarTaxaVigenteEm(any(LocalDateTime.class)))
-                .thenReturn(Optional.of(taxaAtual));
-
-        assertThrows(TaxaValidationException.class,
-                () -> taxaService.atualizarTaxa(dto));
-
-        verify(taxaRepo, never()).save(any(Taxa.class));
-    }
-
-    @Test
-    void deveAceitarValoresMonetariosIguaisAZero() {
-
-        TaxaCadastroDTO dto = new TaxaCadastroDTO(
-                BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                LocalDateTime.of(2026, 1, 1, 0, 0),
-                null);
-
-        when(taxaRepo.buscarTaxasComSobreposicao(dto.inicioVigencia(), dto.fimVigencia()))
-                .thenReturn(List.of());
-
-        when(taxaRepo.save(any(Taxa.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        TaxaResponseDTO resultado = taxaService.cadastrarNovaTaxa(dto);
+        TaxaResponseDTO resultado = taxaService.cadastrarTaxa(cadastroDTO);
 
         assertNotNull(resultado);
-        assertEquals(BigDecimal.ZERO, resultado.custoPorUnidade());
+        assertEquals(id, resultado.id());
 
-        verify(taxaRepo).save(any(Taxa.class));
-
+        verify(taxaRepo).save(taxa);
     }
 
     @Test
-    void deveLancarExcecaoQuandoFimForAnteriorAoInicio() {
+    void deveRejeitarCadastroNulo() {
 
-        LocalDateTime inicio = LocalDateTime.of(2026, 1, 1, 0, 0);
+        assertThrows(
+                TaxaValidationException.class,
+                () -> taxaService.cadastrarTaxa(null)
+        );
 
-        TaxaCadastroDTO dto = new TaxaCadastroDTO(
-                new BigDecimal("1.50"),
-                new BigDecimal("10.00"),
-                new BigDecimal("5.00"),
-                new BigDecimal("2.00"),
-                new BigDecimal("1.00"),
-                new BigDecimal("3.00"),
+        verifyNoInteractions(taxaMapper, taxaRepo);
+    }
+
+    @Test
+    void deveRejeitarTaxaComValorNegativo() {
+
+        TaxaCadastroDTO dtoInvalido = new TaxaCadastroDTO(
+                "Distribuidora Teste",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                new BigDecimal("-0.100000"),
+                new BigDecimal("0.250000"),
                 inicio,
-                inicio.minusDays(1));
+                fim
+        );
 
-        assertThrows(TaxaValidationException.class,
-                () -> taxaService.cadastrarNovaTaxa(dto));
+        assertThrows(
+                TaxaValidationException.class,
+                () -> taxaService.cadastrarTaxa(dtoInvalido)
+        );
 
-        verify(taxaRepo, never()).save(any(Taxa.class));
+        verifyNoInteractions(taxaMapper, taxaRepo);
     }
 
     @Test
-    void deveDefinirInicioVigenciaQuandoForNuloNaAtualizacao() {
+    void deveRejeitarTaxaComValorNulo() {
 
-        Taxa taxaAtual = criarTaxaValida();
-        taxaAtual.setInicioVigencia(LocalDateTime.of(2026, 1, 1, 0, 0));
+        TaxaCadastroDTO dtoInvalido = new TaxaCadastroDTO(
+                "Distribuidora Teste",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                null,
+                new BigDecimal("0.250000"),
+                inicio,
+                fim
+        );
 
-        TaxaAtualizacaoDTO dto = criarAtualizacaoValida(null);
+        assertThrows(
+                TaxaValidationException.class,
+                () -> taxaService.cadastrarTaxa(dtoInvalido)
+        );
 
-        when(taxaRepo.buscarTaxaVigenteEm(any(LocalDateTime.class)))
-                .thenReturn(Optional.of(taxaAtual));
+        verifyNoInteractions(taxaMapper, taxaRepo);
+    }
 
-        when(taxaRepo.save(any(Taxa.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+    @Test
+    void deveRejeitarPeriodoComFimAnteriorAoInicio() {
 
-        TaxaResponseDTO resultado = taxaService.atualizarTaxa(dto);
+        TaxaCadastroDTO dtoInvalido = new TaxaCadastroDTO(
+                "Distribuidora Teste",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                new BigDecimal("0.350000"),
+                new BigDecimal("0.250000"),
+                inicio,
+                inicio.minusDays(1)
+        );
 
-        assertNotNull(resultado.inicioVigencia());
+        assertThrows(
+                TaxaValidationException.class,
+                () -> taxaService.cadastrarTaxa(dtoInvalido)
+        );
 
-        assertTrue(resultado.inicioVigencia()
-                        .isAfter(LocalDateTime.of(2026, 1, 1, 0, 0)));
+        verifyNoInteractions(taxaMapper, taxaRepo);
+    }
 
-        assertEquals(resultado.inicioVigencia(), taxaAtual.getFimVigencia());
+    @Test
+    void deveRejeitarCadastroComSobreposicaoDeVigencia() {
 
-        verify(taxaRepo, times(2)).save(any(Taxa.class));
+        when(taxaMapper.paraEntidade(cadastroDTO)).thenReturn(taxa);
+        when(taxaRepo.buscarTaxasComSobreposicao(
+                anyString(), any(), any(), any(), any(), any()
+        )).thenReturn(List.of(taxa));
+
+        assertThrows(
+                TaxaValidationException.class,
+                () -> taxaService.cadastrarTaxa(cadastroDTO)
+        );
+
+        verify(taxaRepo, never()).save(any());
+    }
+
+    @Test
+    void deveListarTaxasEmOrdemCronologica() {
+
+        Taxa taxaAntiga = new Taxa();
+        taxaAntiga.setId(UUID.randomUUID());
+        taxaAntiga.setInicioVigencia(inicio.minusYears(1));
+
+        Taxa taxaRecente = new Taxa();
+        taxaRecente.setId(UUID.randomUUID());
+        taxaRecente.setInicioVigencia(inicio);
+
+        TaxaResponseDTO responseAntiga = mock(TaxaResponseDTO.class);
+        TaxaResponseDTO responseRecente = mock(TaxaResponseDTO.class);
+
+        when(taxaRepo.findAll()).thenReturn(List.of(taxaRecente, taxaAntiga));
+        when(taxaMapper.paraResponseDTO(taxaAntiga)).thenReturn(responseAntiga);
+        when(taxaMapper.paraResponseDTO(taxaRecente)).thenReturn(responseRecente);
+
+        List<TaxaResponseDTO> resultado = taxaService.listarTaxas();
+
+        assertEquals(2, resultado.size());
+        assertSame(responseAntiga, resultado.get(0));
+        assertSame(responseRecente, resultado.get(1));
+    }
+
+    @Test
+    void deveRetornarListaVaziaQuandoNaoExistiremTaxas() {
+
+        when(taxaRepo.findAll()).thenReturn(List.of());
+
+        List<TaxaResponseDTO> resultado = taxaService.listarTaxas();
+
+        assertNotNull(resultado);
+        assertTrue(resultado.isEmpty());
+
+        verifyNoInteractions(taxaMapper);
+    }
+
+    @Test
+    void deveBuscarTaxaPorId() {
+
+        when(taxaRepo.findById(id)).thenReturn(Optional.of(taxa));
+        when(taxaMapper.paraResponseDTO(taxa)).thenReturn(responseDTO);
+
+        TaxaResponseDTO resultado = taxaService.buscarPorId(id);
+
+        assertNotNull(resultado);
+        assertEquals(id, resultado.id());
+    }
+
+    @Test
+    void deveLancarExcecaoQuandoTaxaNaoExistirPorId() {
+
+        when(taxaRepo.findById(id)).thenReturn(Optional.empty());
+
+        assertThrows(
+                TaxaNotFoundException.class,
+                () -> taxaService.buscarPorId(id)
+        );
+    }
+
+    @Test
+    void deveRejeitarIdNuloNaBusca() {
+
+        assertThrows(
+                TaxaValidationException.class,
+                () -> taxaService.buscarPorId(null)
+        );
+
+        verifyNoInteractions(taxaRepo);
+    }
+
+    @Test
+    void deveBuscarTaxaVigenteNaDataInformada() {
+
+        LocalDate dataConsulta = LocalDate.of(2026, 6, 15);
+
+        when(taxaRepo.buscarTaxaVigenteEm(
+                "Distribuidora Teste",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                dataConsulta
+        )).thenReturn(Optional.of(taxa));
+
+        when(taxaMapper.paraResponseDTO(taxa)).thenReturn(responseDTO);
+
+        TaxaResponseDTO resultado = taxaService.buscarTaxaVigenteEm(
+                "Distribuidora Teste",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                dataConsulta
+        );
+
+        assertNotNull(resultado);
+        assertEquals(id, resultado.id());
+    }
+
+    @Test
+    void deveLancarExcecaoQuandoNaoHouverTaxaVigente() {
+
+        LocalDate dataConsulta = LocalDate.of(2026, 6, 15);
+
+        when(taxaRepo.buscarTaxaVigenteEm(
+                anyString(), any(), any(), any(), any()
+        )).thenReturn(Optional.empty());
+
+        assertThrows(
+                TaxaNotFoundException.class,
+                () -> taxaService.buscarTaxaVigenteEm(
+                        "Distribuidora Teste",
+                        SubgrupoTarifario.B1,
+                        ClasseConsumo.RESIDENCIAL,
+                        ModalidadeTarifaria.CONVENCIONAL,
+                        dataConsulta
+                )
+        );
+    }
+
+    @Test
+    void deveRejeitarDataNulaNaBuscaDeVigencia() {
+
+        assertThrows(
+                TaxaValidationException.class,
+                () -> taxaService.buscarTaxaVigenteEm(
+                        "Distribuidora Teste",
+                        SubgrupoTarifario.B1,
+                        ClasseConsumo.RESIDENCIAL,
+                        ModalidadeTarifaria.CONVENCIONAL,
+                        null
+                )
+        );
+
+        verifyNoInteractions(taxaRepo);
+    }
+
+    @Test
+    void deveReajustarTaxaPreservandoAnterior() {
+
+        LocalDate inicioNovo = fim.plusDays(1);
+
+        TaxaCadastroDTO novoDTO = new TaxaCadastroDTO(
+                "Distribuidora Teste",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                new BigDecimal("0.400000"),
+                new BigDecimal("0.300000"),
+                inicioNovo,
+                null
+        );
+
+        Taxa novaTaxa = new Taxa();
+        novaTaxa.setDistribuidora("Distribuidora Teste");
+        novaTaxa.setSubgrupoTarifario(SubgrupoTarifario.B1);
+        novaTaxa.setClasseConsumo(ClasseConsumo.RESIDENCIAL);
+        novaTaxa.setModalidadeTarifaria(ModalidadeTarifaria.CONVENCIONAL);
+        novaTaxa.setTarifaEnergia(new BigDecimal("0.400000"));
+        novaTaxa.setTarifaUsoDistribuicao(new BigDecimal("0.300000"));
+        novaTaxa.setInicioVigencia(inicioNovo);
+
+        TaxaResponseDTO novaResponse = new TaxaResponseDTO(
+                UUID.randomUUID(),
+                "Distribuidora Teste",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                new BigDecimal("0.400000"),
+                new BigDecimal("0.300000"),
+                inicioNovo,
+                null
+        );
+
+        when(taxaRepo.buscarTaxaVigenteEm(
+                anyString(), any(), any(), any(), eq(inicioNovo)
+        )).thenReturn(Optional.of(taxa));
+
+        when(taxaMapper.paraEntidade(novoDTO)).thenReturn(novaTaxa);
+
+        when(taxaRepo.buscarTaxasComSobreposicao(
+                anyString(), any(), any(), any(), eq(inicioNovo), isNull()
+        )).thenReturn(List.of(taxa));
+
+        when(taxaRepo.save(novaTaxa)).thenReturn(novaTaxa);
+        when(taxaMapper.paraResponseDTO(novaTaxa)).thenReturn(novaResponse);
+
+        TaxaResponseDTO resultado = taxaService.reajustarTaxa(novoDTO);
+
+        assertNotNull(resultado);
+        assertEquals(inicioNovo, taxa.getFimVigencia());
+        assertEquals(inicioNovo, novaTaxa.getInicioVigencia());
+
+        verify(taxaRepo).save(novaTaxa);
+    }
+
+    @Test
+    void deveRejeitarReajusteComInicioIgualAoDaTaxaAtual() {
+
+        when(taxaRepo.buscarTaxaVigenteEm(
+                anyString(), any(), any(), any(), eq(inicio)
+        )).thenReturn(Optional.of(taxa));
+
+        assertThrows(
+                TaxaValidationException.class,
+                () -> taxaService.reajustarTaxa(cadastroDTO)
+        );
+
+        verify(taxaRepo, never()).save(any());
+    }
+
+    @Test
+    void deveRejeitarReajusteQuandoExistirOutraTaxaSobreposta() {
+
+        LocalDate inicioNovo = fim.plusDays(1);
+
+        TaxaCadastroDTO novoDTO = new TaxaCadastroDTO(
+                "Distribuidora Teste",
+                SubgrupoTarifario.B1,
+                ClasseConsumo.RESIDENCIAL,
+                ModalidadeTarifaria.CONVENCIONAL,
+                new BigDecimal("0.400000"),
+                new BigDecimal("0.300000"),
+                inicioNovo,
+                null
+        );
+
+        Taxa novaTaxa = new Taxa();
+        novaTaxa.setDistribuidora("Distribuidora Teste");
+        novaTaxa.setSubgrupoTarifario(SubgrupoTarifario.B1);
+        novaTaxa.setClasseConsumo(ClasseConsumo.RESIDENCIAL);
+        novaTaxa.setModalidadeTarifaria(ModalidadeTarifaria.CONVENCIONAL);
+        novaTaxa.setTarifaEnergia(new BigDecimal("0.400000"));
+        novaTaxa.setTarifaUsoDistribuicao(new BigDecimal("0.300000"));
+        novaTaxa.setInicioVigencia(inicioNovo);
+
+        Taxa outraTaxa = new Taxa();
+        outraTaxa.setId(UUID.randomUUID());
+        outraTaxa.setDistribuidora("Distribuidora Teste");
+        outraTaxa.setSubgrupoTarifario(SubgrupoTarifario.B1);
+        outraTaxa.setClasseConsumo(ClasseConsumo.RESIDENCIAL);
+        outraTaxa.setModalidadeTarifaria(ModalidadeTarifaria.CONVENCIONAL);
+        outraTaxa.setInicioVigencia(inicioNovo);
+        outraTaxa.setTarifaEnergia(new BigDecimal("0.450000"));
+        outraTaxa.setTarifaUsoDistribuicao(new BigDecimal("0.350000"));
+
+        when(taxaRepo.buscarTaxaVigenteEm(
+                anyString(), any(), any(), any(), eq(inicioNovo)
+        )).thenReturn(Optional.of(taxa));
+
+        when(taxaMapper.paraEntidade(novoDTO)).thenReturn(novaTaxa);
+
+        when(taxaRepo.buscarTaxasComSobreposicao(
+                anyString(), any(), any(), any(), eq(inicioNovo), isNull()
+        )).thenReturn(List.of(taxa, outraTaxa));
+
+        assertThrows(
+                TaxaValidationException.class,
+                () -> taxaService.reajustarTaxa(novoDTO)
+        );
+
+        verify(taxaRepo, never()).save(any());
+    }
+
+    @Test
+    void deveRejeitarReajusteNulo() {
+
+        assertThrows(
+                TaxaValidationException.class,
+                () -> taxaService.reajustarTaxa(null)
+        );
+
+        verifyNoInteractions(taxaRepo, taxaMapper);
     }
 }

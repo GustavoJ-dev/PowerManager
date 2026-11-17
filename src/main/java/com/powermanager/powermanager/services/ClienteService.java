@@ -1,25 +1,29 @@
 package com.powermanager.powermanager.services;
 
+import com.powermanager.powermanager.dto.cliente.ClienteAtualizacaoDTO;
 import com.powermanager.powermanager.dto.cliente.ClienteCadastroDTO;
 import com.powermanager.powermanager.dto.cliente.ClienteResponseDTO;
 import com.powermanager.powermanager.entity.Cliente;
-import com.powermanager.powermanager.exception.ClienteNotFoundException;
+import com.powermanager.powermanager.exception.cliente.ClienteNotFoundException;
 import com.powermanager.powermanager.mapper.ClienteMapper;
 import com.powermanager.powermanager.repository.ClienteRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class ClienteService {
 
     private final ClienteRepo clienteRepo;
     private final ClienteMapper clienteMapper;
 
-    public ClienteResponseDTO cadastrarCliente(ClienteCadastroDTO clienteDTO){
+    @Transactional
+    public ClienteResponseDTO cadastrarCliente(ClienteCadastroDTO clienteDTO) {
 
         Cliente cliente = clienteMapper.paraEntidade(clienteDTO);
 
@@ -28,26 +32,35 @@ public class ClienteService {
         return clienteMapper.paraResponseDTO(clienteSalvo);
     }
 
-    public List<ClienteResponseDTO> listarClientes(){
+    public List<ClienteResponseDTO> listarClientes() {
 
-        return clienteRepo.findAll().stream()
+        return clienteRepo.findAll()
+                .stream()
                 .map(clienteMapper::paraResponseDTO)
                 .toList();
     }
 
-    public ClienteResponseDTO buscarPorId(UUID id){
+    public ClienteResponseDTO buscarPorId(UUID id) {
 
         Cliente cliente = clienteRepo.findById(id)
-                .orElseThrow(()-> new ClienteNotFoundException("Cliente não encontrado."));
+                .orElseThrow(() ->
+                        new ClienteNotFoundException("Cliente não encontrado."));
 
         return clienteMapper.paraResponseDTO(cliente);
     }
 
-    public void excluir(UUID id){
+    @Transactional
+    public ClienteResponseDTO atualizarCliente(UUID id, ClienteAtualizacaoDTO clienteDTO) {
 
-        clienteRepo.findById(id).orElseThrow(
-                ()-> new ClienteNotFoundException("Cliente não encontrado"));
+        Cliente cliente = clienteRepo.findById(id)
+                .orElseThrow(() ->
+                        new ClienteNotFoundException("Cliente não encontrado."));
 
-        clienteRepo.deleteById(id);
+        clienteMapper.atualizarEntidade(clienteDTO, cliente);
+
+        Cliente clienteAtualizado = clienteRepo.save(cliente);
+
+        return clienteMapper.paraResponseDTO(clienteAtualizado);
     }
 }
+

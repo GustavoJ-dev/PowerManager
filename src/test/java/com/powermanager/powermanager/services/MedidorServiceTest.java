@@ -1,22 +1,26 @@
+
 package com.powermanager.powermanager.services;
 
 import com.powermanager.powermanager.dto.medidor.MedidorAtualizacaoDTO;
 import com.powermanager.powermanager.dto.medidor.MedidorCadastroDTO;
 import com.powermanager.powermanager.dto.medidor.MedidorResponseDTO;
-import com.powermanager.powermanager.entity.Cliente;
 import com.powermanager.powermanager.entity.Medidor;
-import com.powermanager.powermanager.exception.ClienteNotFoundException;
-import com.powermanager.powermanager.exception.MedidorNotFoundException;
-import com.powermanager.powermanager.exception.MedidorValidationException;
+import com.powermanager.powermanager.entity.UnidadeConsumidora;
+import com.powermanager.powermanager.enums.TipoLigacao;
+import com.powermanager.powermanager.enums.TipoMedidor;
+import com.powermanager.powermanager.exception.medidor.MedidorNotFoundException;
+import com.powermanager.powermanager.exception.medidor.MedidorValidationException;
+import com.powermanager.powermanager.exception.unidade_consumidora.UnidadeConsumidoraNotFoundException;
 import com.powermanager.powermanager.mapper.MedidorMapper;
-import com.powermanager.powermanager.repository.ClienteRepo;
 import com.powermanager.powermanager.repository.MedidorRepo;
+import com.powermanager.powermanager.repository.UnidadeConsumidoraRepo;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,13 +29,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class MedidorServiceTest {
+class MedidorServiceTest {
 
     @Mock
     private MedidorRepo medidorRepo;
 
     @Mock
-    private ClienteRepo clienteRepo;
+    private UnidadeConsumidoraRepo unidadeConsumidoraRepo;
 
     @Mock
     private MedidorMapper medidorMapper;
@@ -39,457 +43,462 @@ public class MedidorServiceTest {
     @InjectMocks
     private MedidorService medidorService;
 
-
-    // métodos auxiliares
-
-    private Medidor criarMedidor(){
-
-        Medidor medidor = new Medidor();
-
-        medidor.setId(UUID.randomUUID());
-        medidor.setNumero("MED001");
-        medidor.setLocalizacao("Sala técnica");
-        medidor.setTipo("BIDIRECIONAL");
-        medidor.setCodigoFase("TRIFASICO");
-        medidor.setTipoFatura("ENERGIA");
-        medidor.setDias(30);
-
-        return medidor;
-    }
-
-    private Cliente criarCliente() {
-
-        Cliente cliente = new Cliente();
-
-        cliente.setId(UUID.randomUUID());
-        cliente.setNome("Cliente Teste");
-
-        return cliente;
-    }
-
-    private MedidorCadastroDTO criarCadastroDTO(UUID clienteId) {
+    private MedidorCadastroDTO cadastroDTO(UUID unidadeId) {
 
         return new MedidorCadastroDTO(
-                "MED001",
-                "Sala técnica",
-                "BIDIRECIONAL",
-                "TRIFASICO",
-                "ENERGIA",
-                30,
-                clienteId);
+                "MED-001",
+                TipoMedidor.ELETRONICO,
+                TipoLigacao.MONOFASICO,
+                LocalDate.of(2026, 1, 10),
+                unidadeId
+        );
     }
 
-    private MedidorAtualizacaoDTO criarAtualizacaoDTO() {
+    private MedidorAtualizacaoDTO atualizacaoDTO() {
 
         return new MedidorAtualizacaoDTO(
-                "MED002",
-                "Sala técnica",
-                "BIDIRECIONAL",
-                "TRIFASICO",
-                "ENERGIA",
-                30);
+                TipoMedidor.INTELIGENTE,
+                TipoLigacao.BIFASICO
+        );
     }
 
-    private MedidorResponseDTO criarResponseDTO(Medidor medidor) {
+    private MedidorResponseDTO responseDTO(UUID id, UUID unidadeId) {
 
         return new MedidorResponseDTO(
-                medidor.getId(),
-                medidor.getNumero(),
-                medidor.getLocalizacao(),
-                medidor.getTipo(),
-                medidor.getCodigoFase(),
-                medidor.getTipoFatura(),
-                medidor.getDias(),
-                medidor.getCliente() != null ? medidor.getCliente().getId() : null);
-    }
-
-    private void preencherMedidor(Medidor destino, MedidorAtualizacaoDTO dto) {
-
-        destino.setNumero(dto.numero());
-        destino.setLocalizacao(dto.localizacao());
-        destino.setTipo(dto.tipoMedidor());
-        destino.setCodigoFase(dto.codigoFase());
-        destino.setTipoFatura(dto.classeConsumo());
-        destino.setDias(dto.dias());
+                id,
+                "MED-001",
+                TipoMedidor.ELETRONICO,
+                TipoLigacao.MONOFASICO,
+                true,
+                LocalDate.of(2026, 1, 10),
+                null,
+                unidadeId
+        );
     }
 
     @Test
-    void deveCadastrarMedidor(){
+    void deveCadastrarMedidor() {
 
-        Cliente cliente = criarCliente();
+        UUID unidadeConsumidoraId = UUID.randomUUID();
 
-        MedidorCadastroDTO dto = criarCadastroDTO(cliente.getId());
+        MedidorCadastroDTO dto = new MedidorCadastroDTO(
+                "MED-001",
+                TipoMedidor.ELETRONICO,
+                TipoLigacao.MONOFASICO,
+                LocalDate.now(),
+                unidadeConsumidoraId
+        );
 
-        Medidor medidor = criarMedidor();
-        medidor.setCliente(cliente);
+        UnidadeConsumidora unidadeConsumidora =
+                mock(UnidadeConsumidora.class);
 
-        MedidorResponseDTO responseDTO = criarResponseDTO(medidor);
+        Medidor medidorSalvo = mock(Medidor.class);
 
-        when(medidorRepo.findByNumero(dto.numero())).thenReturn(Optional.empty());
-        when(clienteRepo.findById(cliente.getId())).thenReturn(Optional.of(cliente));
-        when(medidorMapper.paraEntidade(dto)).thenReturn(medidor);
-        when(medidorRepo.save(medidor)).thenReturn(medidor);
-        when(medidorMapper.paraResponseDTO(medidor)).thenReturn(responseDTO);
+        MedidorResponseDTO responseDTO =
+                mock(MedidorResponseDTO.class);
+
+        when(unidadeConsumidoraRepo.findById(unidadeConsumidoraId))
+                .thenReturn(Optional.of(unidadeConsumidora));
+
+        when(unidadeConsumidora.getId())
+                .thenReturn(unidadeConsumidoraId);
+
+        when(medidorRepo.findByNumero("MED-001"))
+                .thenReturn(Optional.empty());
+
+        when(medidorRepo.findByUnidadeConsumidora_IdAndAtivoTrue(
+                unidadeConsumidoraId
+        )).thenReturn(Optional.empty());
+
+        when(medidorMapper.paraEntidade(dto))
+                .thenReturn(medidorSalvo);
+
+        when(medidorRepo.save(medidorSalvo))
+                .thenReturn(medidorSalvo);
+
+        when(medidorMapper.paraResponseDTO(medidorSalvo)).thenReturn(responseDTO);
 
         MedidorResponseDTO resultado = medidorService.cadastrarMedidor(dto);
 
+        assertNotNull(resultado);
         assertEquals(responseDTO, resultado);
 
-        verify(medidorRepo).findByNumero(dto.numero());
-        verify(clienteRepo).findById(cliente.getId());
+        verify(unidadeConsumidoraRepo).findById(unidadeConsumidoraId);
+        verify(unidadeConsumidora).getId();
+        verify(medidorRepo).findByNumero("MED-001");
+        verify(medidorRepo).findByUnidadeConsumidora_IdAndAtivoTrue(unidadeConsumidoraId);
         verify(medidorMapper).paraEntidade(dto);
-        verify(medidorRepo).save(medidor);
-        verify(medidorMapper).paraResponseDTO(medidor);
-
-        assertEquals(cliente, medidor.getCliente());
+        verify(medidorRepo).save(medidorSalvo);
+        verify(medidorMapper).paraResponseDTO(medidorSalvo);
     }
 
     @Test
-    void deveLancarExcecaoQuandoCadastroForNulo(){
+    void deveLancarExcecaoAoCadastrarComUnidadeInexistente() {
 
-        assertThrows(MedidorValidationException.class,
-                ()-> medidorService.cadastrarMedidor(null));
+        UUID unidadeId = UUID.randomUUID();
+        MedidorCadastroDTO dto = cadastroDTO(unidadeId);
 
-        verifyNoInteractions(medidorRepo, clienteRepo, medidorMapper);
-    }
+        when(unidadeConsumidoraRepo.findById(unidadeId))
+                .thenReturn(Optional.empty());
 
-    @Test
-    void deveLancarExcecaoQuandoNumeroJaEstiverCadastrado(){
+        assertThrows(
+                UnidadeConsumidoraNotFoundException.class,
+                () -> medidorService.cadastrarMedidor(dto)
+        );
 
-        MedidorCadastroDTO dto = criarCadastroDTO(UUID.randomUUID());
-
-        when(medidorRepo.findByNumero(dto.numero())).thenReturn(Optional.of(criarMedidor()));
-
-        assertThrows(MedidorValidationException.class,
-                ()-> medidorService.cadastrarMedidor(dto));
-
-        verify(medidorRepo).findByNumero(dto.numero());
-
-        verifyNoInteractions(clienteRepo, medidorMapper);
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoClienteNaoExistir(){
-
-        UUID clienteId = UUID.randomUUID();
-
-        MedidorCadastroDTO dto = criarCadastroDTO(clienteId);
-
-        when(medidorRepo.findByNumero(dto.numero())).thenReturn(Optional.empty());
-        when(clienteRepo.findById(clienteId)).thenReturn(Optional.empty());
-
-        assertThrows(ClienteNotFoundException.class,
-                ()-> medidorService.cadastrarMedidor(dto));
-
-        verify(medidorRepo).findByNumero(dto.numero());
-        verify(clienteRepo).findById(clienteId);
-
+        verify(unidadeConsumidoraRepo).findById(unidadeId);
         verifyNoInteractions(medidorMapper);
+        verify(medidorRepo, never()).save(any());
     }
 
     @Test
-    void devePermitirCadastrarVariosMedidoresParaOMesmoCliente() {
+    void deveLancarExcecaoAoCadastrarNumeroJaExistente() {
 
-        Cliente cliente = criarCliente();
+        UUID unidadeId = UUID.randomUUID();
 
-        MedidorCadastroDTO primeiroDTO = criarCadastroDTO(cliente.getId());
+        MedidorCadastroDTO dto = cadastroDTO(unidadeId);
+        UnidadeConsumidora unidade = mock(UnidadeConsumidora.class);
 
-        Medidor primeiroMedidor = criarMedidor();
-        primeiroMedidor.setCliente(cliente);
+        when(unidadeConsumidoraRepo.findById(unidadeId))
+                .thenReturn(Optional.of(unidade));
+        when(medidorRepo.findByNumero("MED-001"))
+                .thenReturn(Optional.of(mock(Medidor.class)));
 
-        MedidorResponseDTO primeiroResponse = criarResponseDTO(primeiroMedidor);
+        assertThrows(
+                MedidorValidationException.class,
+                () -> medidorService.cadastrarMedidor(dto)
+        );
 
-        when(medidorRepo.findByNumero(primeiroDTO.numero())).thenReturn(Optional.empty());
-        when(clienteRepo.findById(cliente.getId())).thenReturn(Optional.of(cliente));
-        when(medidorMapper.paraEntidade(primeiroDTO)).thenReturn(primeiroMedidor);
-        when(medidorRepo.save(primeiroMedidor)).thenReturn(primeiroMedidor);
-        when(medidorMapper.paraResponseDTO(primeiroMedidor)).thenReturn(primeiroResponse);
-
-        MedidorResponseDTO primeiroResultado = medidorService.cadastrarMedidor(primeiroDTO);
-
-        assertEquals(primeiroResponse, primeiroResultado);
-
-        MedidorCadastroDTO segundoDTO = new MedidorCadastroDTO(
-                "MED002",
-                "Garagem",
-                "BIDIRECIONAL",
-                "TRIFASICO",
-                "ENERGIA",
-                30,
-                cliente.getId());
-
-        Medidor segundoMedidor = criarMedidor();
-        segundoMedidor.setId(UUID.randomUUID());
-        segundoMedidor.setNumero("MED002");
-        segundoMedidor.setLocalizacao("Garagem");
-        segundoMedidor.setCliente(cliente);
-
-        MedidorResponseDTO segundoResponse = criarResponseDTO(segundoMedidor);
-
-        when(medidorRepo.findByNumero(segundoDTO.numero())).thenReturn(Optional.empty());
-        when(medidorMapper.paraEntidade(segundoDTO)).thenReturn(segundoMedidor);
-        when(medidorRepo.save(segundoMedidor)).thenReturn(segundoMedidor);
-        when(medidorMapper.paraResponseDTO(segundoMedidor)).thenReturn(segundoResponse);
-        MedidorResponseDTO segundoResultado = medidorService.cadastrarMedidor(segundoDTO);
-
-        assertEquals(segundoResponse, segundoResultado);
-        assertEquals(cliente.getId(), segundoResultado.clienteId());
-
-        verify(medidorRepo, times(2)).save(any(Medidor.class));
-        verify(clienteRepo, times(2)).findById(cliente.getId());
-    }
-
-    //listar medidores
-    @Test
-    void deveListarMedidores(){
-
-        Medidor medidor = criarMedidor();
-
-        MedidorResponseDTO responseDTO = criarResponseDTO(medidor);
-
-        when(medidorRepo.findAll()).thenReturn(List.of(medidor));
-
-        when(medidorMapper.paraResponseDTO(medidor)).thenReturn(responseDTO);
-
-        List<MedidorResponseDTO> resultado = medidorService.listarMedidores();
-
-        assertEquals(1, resultado.size());
-        assertEquals(responseDTO, resultado.get(0));
-
-        verify(medidorRepo).findAll();
-        verify(medidorMapper).paraResponseDTO(medidor);
-    }
-
-    @Test
-    void deveRetornarListaVaziaQuandoNaoExistiremMedidores() {
-
-        when(medidorRepo.findAll())
-                .thenReturn(List.of());
-
-        List<MedidorResponseDTO> resultado =
-                medidorService.listarMedidores();
-
-        assertTrue(resultado.isEmpty());
-
-        verify(medidorRepo).findAll();
-
+        verify(medidorRepo).findByNumero("MED-001");
+        verify(medidorRepo, never())
+                .findByUnidadeConsumidora_IdAndAtivoTrue(any());
         verifyNoInteractions(medidorMapper);
-    }
-
-
-    @Test
-    void deveBuscarMedidorPorNumero(){
-
-        String numero = "MED001";
-
-        Medidor medidor = criarMedidor();
-
-        MedidorResponseDTO responseDTO = criarResponseDTO(medidor);
-
-        when(medidorRepo.findByNumero(numero)).thenReturn(Optional.of(medidor));
-        when(medidorMapper.paraResponseDTO(medidor)).thenReturn(responseDTO);
-
-        MedidorResponseDTO resultado = medidorService.buscarPorNumero(numero);
-
-        assertEquals(responseDTO, resultado);
-
-        verify(medidorRepo).findByNumero(numero);
-        verify(medidorMapper).paraResponseDTO(medidor);
+        verify(medidorRepo, never()).save(any());
     }
 
     @Test
-    void deveLancarExcecaoQuandoMedidorNaoForEncontrado(){
+    void deveLancarExcecaoQuandoUnidadeJaPossuirMedidorAtivo() {
 
-        String numero = "MED001";
+        UUID unidadeConsumidoraId = UUID.randomUUID();
 
-        when(medidorRepo.findByNumero(numero)).thenReturn(Optional.empty());
+        MedidorCadastroDTO dto = new MedidorCadastroDTO(
+                "MED-001",
+                TipoMedidor.ELETRONICO,
+                TipoLigacao.MONOFASICO,
+                LocalDate.now(),
+                unidadeConsumidoraId
+        );
 
-        assertThrows(MedidorNotFoundException.class,
-                ()-> medidorService.buscarPorNumero(numero));
+        UnidadeConsumidora unidadeConsumidora = mock(UnidadeConsumidora.class);
 
-        verify(medidorRepo).findByNumero(numero);
-        verifyNoInteractions(medidorMapper);
+        when(unidadeConsumidoraRepo.findById(unidadeConsumidoraId))
+                .thenReturn(Optional.of(unidadeConsumidora));
+
+        when(unidadeConsumidora.getId())
+                .thenReturn(unidadeConsumidoraId);
+
+        when(medidorRepo.findByNumero("MED-001"))
+                .thenReturn(Optional.empty());
+
+        when(medidorRepo.findByUnidadeConsumidora_IdAndAtivoTrue(unidadeConsumidoraId))
+                .thenReturn(Optional.of(mock(Medidor.class)));
+
+        assertThrows(
+                MedidorValidationException.class,
+                () -> medidorService.cadastrarMedidor(dto)
+        );
+
+        verify(medidorRepo, never()).save(any(Medidor.class));
     }
 
     @Test
     void deveBuscarMedidorPorId() {
 
         UUID id = UUID.randomUUID();
+        UUID unidadeId = UUID.randomUUID();
 
-        Medidor medidor = criarMedidor();
-
-        MedidorResponseDTO responseDTO = criarResponseDTO(medidor);
+        Medidor medidor = mock(Medidor.class);
+        MedidorResponseDTO response = responseDTO(id, unidadeId);
 
         when(medidorRepo.findById(id)).thenReturn(Optional.of(medidor));
-        when(medidorMapper.paraResponseDTO(medidor)).thenReturn(responseDTO);
+        when(medidorMapper.paraResponseDTO(medidor)).thenReturn(response);
 
         MedidorResponseDTO resultado = medidorService.buscarPorId(id);
 
-        assertEquals(responseDTO, resultado);
+        assertEquals(response, resultado);
 
         verify(medidorRepo).findById(id);
         verify(medidorMapper).paraResponseDTO(medidor);
     }
 
     @Test
-    void deveLancarExcecaoQuandoMedidorNaoForEncontradoPorId(){
+    void deveLancarExcecaoAoBuscarMedidorInexistente() {
 
         UUID id = UUID.randomUUID();
 
         when(medidorRepo.findById(id)).thenReturn(Optional.empty());
 
-        assertThrows(MedidorNotFoundException.class,
-                () -> medidorService.buscarPorId(id));
+        assertThrows(
+                MedidorNotFoundException.class,
+                () -> medidorService.buscarPorId(id)
+        );
 
         verify(medidorRepo).findById(id);
-
         verifyNoInteractions(medidorMapper);
     }
 
     @Test
-    void deveAtualizarMedidor(){
+    void deveBuscarMedidorPorNumero() {
 
         UUID id = UUID.randomUUID();
+        UUID unidadeId = UUID.randomUUID();
 
-        Medidor medidor = criarMedidor();
+        Medidor medidor = mock(Medidor.class);
+        MedidorResponseDTO response = responseDTO(id, unidadeId);
 
-        MedidorAtualizacaoDTO dto = criarAtualizacaoDTO();
-
-        MedidorResponseDTO responseDTO = new MedidorResponseDTO(
-                id,
-                dto.numero(),
-                dto.localizacao(),
-                dto.tipoMedidor(),
-                dto.codigoFase(),
-                dto.classeConsumo(),
-                dto.dias(),
-                null);
-
-        medidor.setId(id);
-
-        when(medidorRepo.findById(id)).thenReturn(Optional.of(medidor));
-        when(medidorRepo.findByNumero(dto.numero())).thenReturn(Optional.empty());
-
-        doAnswer(invocation -> {
-
-            MedidorAtualizacaoDTO dados = invocation.getArgument(0);
-            Medidor destino = invocation.getArgument(1);
-
-            preencherMedidor(destino, dados);
-
-            return null;
-        }).when(medidorMapper).atualizarEntidade(dto, medidor);
-
-        when(medidorRepo.save(medidor)).thenReturn(medidor);
-
-        when(medidorMapper.paraResponseDTO(medidor)).thenReturn(responseDTO);
+        when(medidorRepo.findByNumero("MED-001"))
+                .thenReturn(Optional.of(medidor));
+        when(medidorMapper.paraResponseDTO(medidor)).thenReturn(response);
 
         MedidorResponseDTO resultado =
-                medidorService.atualizarMedidor(id, dto);
+                medidorService.buscarPorNumero("MED-001");
 
-        assertEquals(responseDTO, resultado);
-        assertEquals("MED002", medidor.getNumero());
-        assertEquals("Sala técnica", medidor.getLocalizacao());
-        assertEquals("BIDIRECIONAL", medidor.getTipo());
-        assertEquals("TRIFASICO", medidor.getCodigoFase());
-        assertEquals("ENERGIA", medidor.getTipoFatura());
-        assertEquals(30, medidor.getDias());
+        assertEquals(response, resultado);
+
+        verify(medidorRepo).findByNumero("MED-001");
+        verify(medidorMapper).paraResponseDTO(medidor);
+    }
+
+    @Test
+    void deveLancarExcecaoAoBuscarNumeroInexistente() {
+
+        when(medidorRepo.findByNumero("MED-999"))
+                .thenReturn(Optional.empty());
+
+        assertThrows(
+                MedidorNotFoundException.class,
+                () -> medidorService.buscarPorNumero("MED-999")
+        );
+
+        verify(medidorRepo).findByNumero("MED-999");
+        verifyNoInteractions(medidorMapper);
+    }
+
+    @Test
+    void deveLancarExcecaoAoBuscarNumeroEmBranco() {
+
+        assertThrows(
+                MedidorValidationException.class,
+                () -> medidorService.buscarPorNumero(" ")
+        );
+
+        verifyNoInteractions(medidorRepo, medidorMapper);
+    }
+
+    @Test
+    void deveListarMedidores() {
+
+        UUID unidadeId = UUID.randomUUID();
+
+        Medidor medidor1 = mock(Medidor.class);
+        Medidor medidor2 = mock(Medidor.class);
+
+        MedidorResponseDTO response1 =
+                responseDTO(UUID.randomUUID(), unidadeId);
+        MedidorResponseDTO response2 =
+                responseDTO(UUID.randomUUID(), unidadeId);
+
+        when(medidorRepo.findAll())
+                .thenReturn(List.of(medidor1, medidor2));
+        when(medidorMapper.paraResponseDTO(medidor1))
+                .thenReturn(response1);
+        when(medidorMapper.paraResponseDTO(medidor2))
+                .thenReturn(response2);
+
+        List<MedidorResponseDTO> resultado = medidorService.listarMedidores();
+
+        assertEquals(2, resultado.size());
+        assertEquals(response1, resultado.get(0));
+        assertEquals(response2, resultado.get(1));
+
+        verify(medidorRepo).findAll();
+        verify(medidorMapper).paraResponseDTO(medidor1);
+        verify(medidorMapper).paraResponseDTO(medidor2);
+    }
+
+    @Test
+    void deveRetornarListaVaziaQuandoNaoExistiremMedidores() {
+
+        when(medidorRepo.findAll()).thenReturn(List.of());
+
+        List<MedidorResponseDTO> resultado = medidorService.listarMedidores();
+
+        assertNotNull(resultado);
+        assertTrue(resultado.isEmpty());
+
+        verify(medidorRepo).findAll();
+        verifyNoInteractions(medidorMapper);
+    }
+
+    @Test
+    void deveListarMedidoresPorUnidadeConsumidora() {
+
+        UUID unidadeId = UUID.randomUUID();
+
+        Medidor medidor = mock(Medidor.class);
+        MedidorResponseDTO response =
+                responseDTO(UUID.randomUUID(), unidadeId);
+
+        when(unidadeConsumidoraRepo.existsById(unidadeId)).thenReturn(true);
+        when(medidorRepo.findByUnidadeConsumidora_Id(unidadeId))
+                .thenReturn(List.of(medidor));
+        when(medidorMapper.paraResponseDTO(medidor)).thenReturn(response);
+
+        List<MedidorResponseDTO> resultado =
+                medidorService.listarPorUnidadeConsumidora(unidadeId);
+
+        assertEquals(1, resultado.size());
+        assertEquals(response, resultado.get(0));
+
+        verify(unidadeConsumidoraRepo).existsById(unidadeId);
+        verify(medidorRepo).findByUnidadeConsumidora_Id(unidadeId);
+        verify(medidorMapper).paraResponseDTO(medidor);
+    }
+
+    @Test
+    void deveLancarExcecaoAoListarMedidoresDeUnidadeInexistente() {
+
+        UUID unidadeId = UUID.randomUUID();
+
+        when(unidadeConsumidoraRepo.existsById(unidadeId)).thenReturn(false);
+
+        assertThrows(
+                UnidadeConsumidoraNotFoundException.class,
+                () -> medidorService.listarPorUnidadeConsumidora(unidadeId)
+        );
+
+        verify(unidadeConsumidoraRepo).existsById(unidadeId);
+        verify(medidorRepo, never())
+                .findByUnidadeConsumidora_Id(any());
+        verifyNoInteractions(medidorMapper);
+    }
+
+    @Test
+    void deveAtualizarMedidor() {
+
+        UUID id = UUID.randomUUID();
+        UUID unidadeId = UUID.randomUUID();
+
+        Medidor medidor = mock(Medidor.class);
+        MedidorAtualizacaoDTO dto = atualizacaoDTO();
+        MedidorResponseDTO response = responseDTO(id, unidadeId);
+
+        when(medidorRepo.findById(id)).thenReturn(Optional.of(medidor));
+        when(medidorRepo.save(medidor)).thenReturn(medidor);
+        when(medidorMapper.paraResponseDTO(medidor)).thenReturn(response);
+
+        MedidorResponseDTO resultado = medidorService.atualizarMedidor(id, dto);
+
+        assertEquals(response, resultado);
 
         verify(medidorRepo).findById(id);
-        verify(medidorRepo).findByNumero(dto.numero());
         verify(medidorMapper).atualizarEntidade(dto, medidor);
         verify(medidorRepo).save(medidor);
         verify(medidorMapper).paraResponseDTO(medidor);
     }
 
     @Test
-    void deveLancarExcecaoQuandoAtualizacaoForNula() {
+    void deveRetirarMedidor() {
 
-        assertThrows(MedidorValidationException.class,
-                () -> medidorService.atualizarMedidor(UUID.randomUUID(), null));
+        UUID id = UUID.randomUUID();
+        UUID unidadeId = UUID.randomUUID();
+        LocalDate dataInstalacao = LocalDate.of(2026, 1, 10);
+        LocalDate dataRetirada = LocalDate.of(2026, 5, 10);
+
+        Medidor medidor = mock(Medidor.class);
+
+        MedidorResponseDTO response = new MedidorResponseDTO(
+                id,
+                "MED-001",
+                TipoMedidor.ELETRONICO,
+                TipoLigacao.MONOFASICO,
+                false,
+                dataInstalacao,
+                dataRetirada,
+                unidadeId
+        );
+
+        when(medidorRepo.findById(id)).thenReturn(Optional.of(medidor));
+        when(medidor.getAtivo()).thenReturn(true);
+        when(medidor.getDataRetirada()).thenReturn(null);
+        when(medidor.getDataInstalacao()).thenReturn(dataInstalacao);
+        when(medidorRepo.save(medidor)).thenReturn(medidor);
+        when(medidorMapper.paraResponseDTO(medidor)).thenReturn(response);
+
+        MedidorResponseDTO resultado =
+                medidorService.retirarMedidor(id, dataRetirada);
+
+        assertEquals(response, resultado);
+
+        verify(medidor).setAtivo(false);
+        verify(medidor).setDataRetirada(dataRetirada);
+        verify(medidorRepo).save(medidor);
+        verify(medidorMapper).paraResponseDTO(medidor);
+    }
+
+    @Test
+    void deveImpedirRetiradaComDataNula() {
+
+        UUID id = UUID.randomUUID();
+
+        assertThrows(
+                MedidorValidationException.class,
+                () -> medidorService.retirarMedidor(id, null)
+        );
 
         verifyNoInteractions(medidorRepo, medidorMapper);
     }
 
     @Test
-    void deveLancarExcecaoAoAtualizarMedidorInexistente() {
+    void deveImpedirRetiradaComDataAnteriorOuIgualAInstalacao() {
 
         UUID id = UUID.randomUUID();
+        LocalDate dataInstalacao = LocalDate.of(2026, 1, 10);
 
-        MedidorAtualizacaoDTO dto = criarAtualizacaoDTO();
-
-        when(medidorRepo.findById(id)).thenReturn(Optional.empty());
-
-        assertThrows(MedidorNotFoundException.class,
-                () -> medidorService.atualizarMedidor(id, dto));
-
-        verify(medidorRepo).findById(id);
-
-        verify(medidorRepo, never()).save(any(Medidor.class));
-        verifyNoInteractions(medidorMapper);
-
-    }
-
-    @Test
-    void deveLancarExcecaoQuandoNumeroPertencerAOutroMedidor() {
-
-        UUID id = UUID.randomUUID();
-
-        Medidor medidorAtual = criarMedidor();
-        medidorAtual.setId(id);
-
-        Medidor outroMedidor = criarMedidor();
-        outroMedidor.setId(UUID.randomUUID());
-
-        MedidorAtualizacaoDTO dto = criarAtualizacaoDTO();
-
-        when(medidorRepo.findById(id)).thenReturn(Optional.of(medidorAtual));
-
-        when(medidorRepo.findByNumero(dto.numero())).thenReturn(Optional.of(outroMedidor));
-
-        assertThrows(MedidorValidationException.class,
-                () -> medidorService.atualizarMedidor(id, dto));
-
-        verify(medidorRepo).findById(id);
-        verify(medidorRepo).findByNumero(dto.numero());
-
-        verify(medidorRepo, never()).save(any(Medidor.class));
-        verifyNoInteractions(medidorMapper);
-    }
-
-    // =========================
-    // EXCLUSÃO
-    // =========================
-
-    @Test
-    void deveExcluirMedidor() {
-
-        UUID id = UUID.randomUUID();
-
-        Medidor medidor = criarMedidor();
+        Medidor medidor = mock(Medidor.class);
 
         when(medidorRepo.findById(id)).thenReturn(Optional.of(medidor));
+        when(medidor.getAtivo()).thenReturn(true);
+        when(medidor.getDataRetirada()).thenReturn(null);
+        when(medidor.getDataInstalacao()).thenReturn(dataInstalacao);
 
-        doNothing().when(medidorRepo).deleteById(id);
+        assertThrows(
+                MedidorValidationException.class,
+                () -> medidorService.retirarMedidor(id, dataInstalacao)
+        );
 
-        assertDoesNotThrow(() -> medidorService.excluirMedidor(id));
-
-        verify(medidorRepo).findById(id);
-        verify(medidorRepo).deleteById(id);
+        verify(medidorRepo, never()).save(any());
+        verifyNoInteractions(medidorMapper);
     }
 
     @Test
-    void deveLancarExcecaoAoExcluirMedidorInexistente() {
+    void deveImpedirRetiradaDeMedidorJaInativo() {
 
         UUID id = UUID.randomUUID();
 
-        when(medidorRepo.findById(id)).thenReturn(Optional.empty());
+        Medidor medidor = mock(Medidor.class);
 
-        assertThrows(MedidorNotFoundException.class,
-                () -> medidorService.excluirMedidor(id));
+        when(medidorRepo.findById(id)).thenReturn(Optional.of(medidor));
+        when(medidor.getAtivo()).thenReturn(false);
 
-        verify(medidorRepo).findById(id);
+        assertThrows(
+                MedidorValidationException.class,
+                () -> medidorService.retirarMedidor(
+                        id, LocalDate.of(2026, 5, 10)
+                )
+        );
 
-        verify(medidorRepo, never()).deleteById(any(UUID.class));
+        verify(medidorRepo, never()).save(any());
+        verifyNoInteractions(medidorMapper);
     }
 }
